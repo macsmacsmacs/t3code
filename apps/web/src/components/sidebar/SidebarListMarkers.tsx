@@ -27,12 +27,16 @@ function SortableSidebarMarker(props: {
   useLayoutEffect(() => {
     const hint = node.current?.firstElementChild;
     if (!props.revealOverflow || transform?.y === undefined || !hint) return;
-    // Only follow a hint whose resting slot is on screen; scrolling to an off-screen one jumps the list.
     const viewport = getScrollableAncestors(hint, 1)[0]?.getBoundingClientRect();
+    if (!viewport) return;
     const rect = hint.getBoundingClientRect();
-    const restingTop = rect.top - transform.y;
-    const restingBottom = rect.bottom - transform.y;
-    if (viewport && restingTop < viewport.bottom && restingBottom > viewport.top) {
+    const onScreen = (top: number, bottom: number) =>
+      top < viewport.bottom && bottom > viewport.top;
+    // Follow a hint that is or rests on screen; scrolling to an off-screen one jumps the list.
+    if (
+      onScreen(rect.top, rect.bottom) ||
+      onScreen(rect.top - transform.y, rect.bottom - transform.y)
+    ) {
       hint.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
   }, [node, props.revealOverflow, transform?.y]);

@@ -2,6 +2,7 @@ import {
   type CollisionDetection,
   DndContext,
   PointerSensor,
+  rectIntersection,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -37,7 +38,7 @@ function SortableList(props: {
       <DndContext
         sensors={sensors}
         autoScroll={false}
-        collisionDetection={props.collisionDetection}
+        collisionDetection={props.collisionDetection ?? rectIntersection}
       >
         <SortableContext
           items={[...ROW_IDS, sidebarMarkerId("settled-placeholder")]}
@@ -109,20 +110,29 @@ describe("SidebarSectionPlaceholder", () => {
     document.dispatchEvent(pointer("pointerup", row, -6));
   });
 
-  it("reveals an on-screen settled drop hint the drag pushes below the viewport", async () => {
-    // A row lifted into a taller section moves the hint down by a card's height in one step.
-    const pushHintDown: SortingStrategy = (args) =>
+  // Lifting a row into a taller section moves the hint a card's height down in one step; into a
+  // shorter one, up.
+  it.each([
+    {
+      motion: "pushes a visible hint below",
+      shift: 80,
+      restingTop: (height: number) => -height - 4,
+    },
+    { motion: "lifts a hint resting below into", shift: -46, restingTop: () => 35 },
+  ])("reveals the settled drop hint when the drag $motion the viewport", async (fixture) => {
+    const shiftHint: SortingStrategy = (args) =>
       args.index === ROW_IDS.length
-        ? { x: 0, y: 80, scaleX: 1, scaleY: 1 }
+        ? { x: 0, y: fixture.shift, scaleX: 1, scaleY: 1 }
         : verticalListSortingStrategy(args);
     await using screen = await render(
-      <SortableList strategy={pushHintDown} collisionDetection={() => [{ id: "thread-0" }]} />,
+      <SortableList strategy={shiftHint} collisionDetection={() => [{ id: "thread-0" }]} />,
     );
     const scroller = screen.getByTestId("scroller").element();
     const placeholder = screen.getByTestId("sidebar-settled-placeholder").element();
     const box = placeholder.firstElementChild!;
+    const resting = box.getBoundingClientRect();
     scroller.scrollTop +=
-      box.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom + 4;
+      resting.top - scroller.getBoundingClientRect().bottom - fixture.restingTop(resting.height);
     const row = screen.getByTestId("thread-38").element();
 
     row.dispatchEvent(pointer("pointerdown", row, 0));
