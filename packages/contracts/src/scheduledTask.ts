@@ -147,7 +147,8 @@ const ScheduledTaskUpsertWebhookSchedule = Schema.Struct({
           description: "Default: stored secret.",
         }),
         secretRef: Schema.optional(SecretRef).annotate({
-          description: "From `request_secret`. Instead of `secret`. Spent by this save.",
+          description:
+            "From `request_secret` in a thread of this task's project. Instead of `secret`. Spent by this save.",
         }),
       }),
     ),

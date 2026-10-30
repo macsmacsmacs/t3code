@@ -750,7 +750,8 @@ export const OrchestratorMcpRequestSecretResult = Schema.Union([
   Schema.Struct({
     status: Schema.Literal("saved"),
     secretRef: SecretRef.annotate({
-      description: "One-use. Pass to a tool that accepts a secretRef. You never see the value.",
+      description:
+        "One-use, only in this thread's project. Pass to a tool that accepts a secretRef. You never see the value.",
     }),
   }),
   Schema.Struct({
