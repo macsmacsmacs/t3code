@@ -1,5 +1,16 @@
-import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  type CollisionDetection,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  type SortingStrategy,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { render } from "../../../test/render";
 import { sidebarMarkerId } from "../Sidebar.logic";
@@ -16,14 +27,21 @@ function Row(props: { id: string }) {
   );
 }
 
-function SortableList() {
+function SortableList(props: {
+  strategy?: SortingStrategy;
+  collisionDetection?: CollisionDetection;
+}) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 3 } }));
   return (
     <div data-testid="scroller" style={{ height: 300, overflowY: "auto" }}>
-      <DndContext sensors={sensors} autoScroll={false}>
+      <DndContext
+        sensors={sensors}
+        autoScroll={false}
+        collisionDetection={props.collisionDetection}
+      >
         <SortableContext
           items={[...ROW_IDS, sidebarMarkerId("settled-placeholder")]}
-          strategy={verticalListSortingStrategy}
+          strategy={props.strategy ?? verticalListSortingStrategy}
         >
           <ul>
             {ROW_IDS.map((id) => (
@@ -79,6 +97,32 @@ describe("SidebarSectionPlaceholder", () => {
     const clipped = box.getBoundingClientRect();
     scroller.scrollTop +=
       clipped.top + clipped.height / 2 - scroller.getBoundingClientRect().bottom;
+    const row = screen.getByTestId("thread-38").element();
+
+    row.dispatchEvent(pointer("pointerdown", row, 0));
+    document.dispatchEvent(pointer("pointermove", row, -6));
+    await vi.waitFor(() => expect(placeholder.getAttribute("style")).toContain("translate"));
+
+    expect(box.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      scroller.getBoundingClientRect().bottom,
+    );
+    document.dispatchEvent(pointer("pointerup", row, -6));
+  });
+
+  it("reveals an on-screen settled drop hint the drag pushes below the viewport", async () => {
+    // A row lifted into a taller section moves the hint down by a card's height in one step.
+    const pushHintDown: SortingStrategy = (args) =>
+      args.index === ROW_IDS.length
+        ? { x: 0, y: 80, scaleX: 1, scaleY: 1 }
+        : verticalListSortingStrategy(args);
+    await using screen = await render(
+      <SortableList strategy={pushHintDown} collisionDetection={() => [{ id: "thread-0" }]} />,
+    );
+    const scroller = screen.getByTestId("scroller").element();
+    const placeholder = screen.getByTestId("sidebar-settled-placeholder").element();
+    const box = placeholder.firstElementChild!;
+    scroller.scrollTop +=
+      box.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom + 4;
     const row = screen.getByTestId("thread-38").element();
 
     row.dispatchEvent(pointer("pointerdown", row, 0));
