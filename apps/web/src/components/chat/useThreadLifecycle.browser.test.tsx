@@ -51,6 +51,7 @@ function threadInput(threadId: string, branch: string) {
     activeThread: thread as never,
     activeThreadId: ref.threadId,
     activeThreadRef: ref,
+    threadDetailRef: ref,
     activeThreadKey: scopedThreadKey(ref),
     localCheckoutBranchMismatch: { threadBranch: branch, currentBranch: "main" },
   };
