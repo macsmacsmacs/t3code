@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as Option from "effect/Option";
 
 import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
 import {
@@ -160,9 +161,9 @@ describe("OpenCode version probe", () => {
     }),
   );
 
-  it.effect("remembers a probed runtime but never a failure", () =>
+  it.effect("remembers a probed 2.x runtime but re-probes 1.x and failures", () =>
     Effect.gen(function* () {
-      const outputs = ["", "opencode v2.0.18\n", "1.18.32\n"];
+      const outputs = ["", "opencode v2.0.18\n", "1.18.32\n", "1.18.32\n"];
       let calls = 0;
       const runtime = {
         runOpenCodeCommand: () => {
@@ -190,8 +191,10 @@ describe("OpenCode version probe", () => {
       assert.strictEqual((yield* probe.get).generation, "v2");
       assert.strictEqual(calls, 2);
       assert.strictEqual((yield* probe.refresh).generation, "v1");
-      assert.strictEqual((yield* probe.get).generation, "v1");
       assert.strictEqual(calls, 3);
+      assert.strictEqual((yield* probe.get).generation, "v1");
+      assert.strictEqual(calls, 4);
+      assert.strictEqual(Option.getOrThrow(yield* probe.lastSuccess).generation, "v1");
     }),
   );
 });

@@ -408,12 +408,15 @@ it.layer(layerUpdate)("OpenCodeDriver updates", (it) => {
         assert.deepStrictEqual(serverStarts, ["connect"], "1.x opens through the 1.x adapter");
 
         versionOutput.current = "opencode v2.2.4\n";
+        serverStarts.length = 0;
         yield* openSession;
-        assert.deepStrictEqual(
+        // The initial status check may also start a 2.x server here; only the 1.x adapter connects.
+        assert.notInclude(
           serverStarts,
-          ["connect", "start"],
-          "after upgrading to 2.x, the next session must open through the OpenCode 2 adapter",
+          "connect",
+          "after upgrading to 2.x, the next session must not open through the 1.x adapter",
         );
+        assert.include(serverStarts, "start", "the OpenCode 2 adapter starts its server");
       }).pipe(Effect.scoped),
   );
 });
