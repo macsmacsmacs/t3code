@@ -168,13 +168,14 @@ describe("ChatMarkdown external link labels", () => {
       "[😀 Read **the documentation**](https://example.com)",
     ]) {
       await using screen = await render(<ChatMarkdown cwd="/tmp/project" text={text} />);
-      const walker = document.createTreeWalker(
-        screen.container.querySelector("a")!,
-        NodeFilter.SHOW_TEXT,
-      );
-      const textNodes: string[] = [];
-      while (walker.nextNode()) textNodes.push(walker.currentNode.nodeValue ?? "");
-      expect(textNodes.filter((node) => /\p{Surrogate}/u.test(node))).toEqual([]);
+      await vi.waitFor(() => {
+        const link = screen.container.querySelector("a");
+        expect(link?.textContent).toContain("😀 Read");
+        const walker = document.createTreeWalker(link!, NodeFilter.SHOW_TEXT);
+        const textNodes: string[] = [];
+        while (walker.nextNode()) textNodes.push(walker.currentNode.nodeValue ?? "");
+        expect(textNodes.filter((node) => /\p{Surrogate}/u.test(node))).toEqual([]);
+      });
     }
   });
 });
