@@ -586,7 +586,7 @@ describe("pull request detail decoding", () => {
     expect(detail.comments.at(-1)?.reviewState).toBe("APPROVED");
   });
 
-  it("marks an issue comment the host minimized, with its reason", () => {
+  it("marks a comment or review the host minimized, with its reason", () => {
     const detail = expectSuccess(
       activity({
         comments: [
@@ -605,12 +605,23 @@ describe("pull request detail decoding", () => {
             minimizedReason: null,
           },
         ],
+        reviews: [
+          {
+            id: "r1",
+            body: "Stale bot summary.",
+            state: "COMMENTED",
+            submittedAt: "2026-07-06T00:00:00Z",
+            isMinimized: true,
+            minimizedReason: "OUTDATED",
+          },
+        ],
       }),
     );
 
     expect(detail.comments.map((comment) => [comment.id, comment.minimized])).toEqual([
       ["c1", { reason: "RESOLVED" }],
       ["c2", undefined],
+      ["r1", { reason: "OUTDATED" }],
     ]);
   });
 
