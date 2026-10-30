@@ -31,6 +31,12 @@ const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-desktop-launc
 const t3Home = NodePath.join(home, "t3");
 NodeFS.mkdirSync(NodePath.join(t3Home, "userdata"), { recursive: true });
 NodeFS.copyFileSync(FIXTURE_DB, NodePath.join(t3Home, "userdata/statev2.sqlite"));
+// The fixture's threads age past the default auto-settle window and would hide in the
+// collapsed Settled shelf, so the check would fail on the calendar instead of the build.
+NodeFS.writeFileSync(
+  NodePath.join(t3Home, "userdata/settings.json"),
+  JSON.stringify({ sidebarAutoSettleAfterDays: null }),
+);
 
 let step = "launching the app";
 let app: ElectronApplication | undefined;
