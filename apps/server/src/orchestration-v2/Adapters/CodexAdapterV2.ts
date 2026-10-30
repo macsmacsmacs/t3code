@@ -4362,6 +4362,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           }).pipe(Effect.orDie),
         );
 
+        // Quota notifications repeat on token ticks; keep this path out of traces.
         const applyRateLimits = Effect.fnUntraced(function* (rateLimits: CodexRateLimitSnapshot) {
           const previous = yield* Ref.getAndUpdate(rateLimitSnapshot, (previous) =>
             mergeCodexRateLimits(previous, rateLimits),
@@ -5728,7 +5729,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           },
         );
 
-        const publishRootTerminal = Effect.fnUntraced(function* (
+        const publishRootTerminal = Effect.fn("CodexAdapterV2.publishRootTerminal")(function* (
           context: ActiveCodexTurnContext,
           event: CodexRootTerminalEvent,
         ) {
