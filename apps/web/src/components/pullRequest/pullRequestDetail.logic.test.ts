@@ -28,6 +28,7 @@ import {
   buildFixFindingsHandoff,
   groupPullRequestTimelineConversations,
   filterPullRequestConversationItems,
+  isPullRequestCommentFinished,
   pagePullRequestConversationItems,
   pullRequestConversationItemComments,
   pullRequestConversationItems,
@@ -558,6 +559,21 @@ describe("review thread conversations", () => {
     expect(filterPullRequestConversationItems(resolved, { bots: false, resolved: true })).toEqual(
       resolved,
     );
+  });
+
+  it("treats a comment the host minimized as finished and hides it with resolved conversations", () => {
+    const minimized: PullRequestComment = {
+      ...loose,
+      id: "minimized",
+      minimized: { reason: "RESOLVED" },
+    };
+    expect(isPullRequestCommentFinished(minimized)).toBe(true);
+    const items = pullRequestConversationItems([loose, minimized], []);
+    expect(
+      filterPullRequestConversationItems(items, { bots: true, resolved: false }).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["c1"]);
   });
 
   it("keeps bot review verdicts when bot comments are hidden", () => {

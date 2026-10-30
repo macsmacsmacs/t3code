@@ -582,6 +582,34 @@ describe("pull request detail decoding", () => {
     expect(detail.comments.at(-1)?.reviewState).toBe("APPROVED");
   });
 
+  it("marks an issue comment the host minimized, with its reason", () => {
+    const detail = expectSuccess(
+      activity({
+        comments: [
+          {
+            id: "c1",
+            body: "Fixed in the next push.",
+            createdAt: "2026-07-04T00:00:00Z",
+            isMinimized: true,
+            minimizedReason: "RESOLVED",
+          },
+          {
+            id: "c2",
+            body: "Still broken on Windows.",
+            createdAt: "2026-07-05T00:00:00Z",
+            isMinimized: false,
+            minimizedReason: null,
+          },
+        ],
+      }),
+    );
+
+    expect(detail.comments.map((comment) => [comment.id, comment.minimized])).toEqual([
+      ["c1", { reason: "RESOLVED" }],
+      ["c2", undefined],
+    ]);
+  });
+
   it("drops the bodyless review GitHub opens to hold line comments", () => {
     const raw = JSON.parse(detailJson) as Record<string, unknown>;
     const detail = expectSuccess(
