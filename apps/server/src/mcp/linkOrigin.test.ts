@@ -32,6 +32,7 @@ import * as ProviderReplayHarness from "../orchestration-v2/testkit/ProviderRepl
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ProjectService from "../project/ProjectService.ts";
+import * as ThreadProjectMove from "../project/ThreadProjectMove.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -120,6 +121,7 @@ const layerTools = Layer.mergeAll(
   Layer.provide(DocumentText.layer.pipe(Layer.provideMerge(NodeServices.layer))),
   Layer.provideMerge(McpServer.McpServer.layer),
   Layer.provide(layerLaunches),
+  Layer.provide(Layer.mock(ThreadProjectMove.ThreadProjectMove)({})),
   Layer.provide(NodeCrypto.layer),
   Layer.provide(
     Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
@@ -350,6 +352,12 @@ it.layer(Layer.provideMerge(layerTools, layerOrchestration))("work a link starts
       // The link may change what it started.
       assert.equal((yield* rename(laptop, ownLaunch)).isError, false);
       assert.equal((yield* projections.getThreadShell(ownLaunch))?.title, "Renamed by laptop");
+      assert.equal(
+        failureCode(
+          yield* call(laptop, "t3_thread_move_project", { threadId: ownLaunch, projectId }),
+        ),
+        "capability_denied",
+      );
       // Not the user's own thread, nor another link's.
       assert.equal(failureCode(yield* rename(laptop, users)), "capability_denied");
       assert.equal(failureCode(yield* rename(desk, ownLaunch)), "capability_denied");

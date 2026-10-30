@@ -27,7 +27,34 @@ import { Tool, Toolkit } from "effect/ai";
 import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
 import * as ScheduledTaskService from "../../../scheduledTasks/ScheduledTaskService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
+import * as ThreadProjectMove from "../../../project/ThreadProjectMove.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+
+const ThreadMoveProjectTool = Tool.make("t3_thread_move_project", {
+  description:
+    "File a thread in an existing project and use that project's folder on future turns. Omit threadId for this thread; its move is requested for after the current turn completes. A failed turn or queued work can prevent the move. Set settleAfterMove to also settle it after a successful move. No files are moved.",
+  parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    threadId: Schema.optional(ThreadId),
+    projectId: ProjectId,
+    settleAfterMove: Schema.optional(Schema.Boolean),
+  }),
+  success: Schema.Union([
+    OrchestrationV2DispatchCommandResult,
+    Schema.Struct({ movesWhenTurnEnds: Schema.Literal(true) }),
+  ]),
+  failure: OrchestratorMcpFailure,
+  failureMode: "return" as const,
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    ThreadManagementService.ThreadManagementService,
+    ThreadProjectMove.ThreadProjectMove,
+    Crypto.Crypto,
+  ],
+})
+  .annotate(Tool.Title, "File a thread in a project")
+  .annotate(Tool.Strict, true)
+  .annotate(Tool.Destructive, true);
 
 const ThreadOrganizeTool = Tool.make("t3_thread_organize", {
   description:
@@ -240,6 +267,7 @@ const ScheduledTaskRunTool = Tool.make("run_scheduled_task_now", {
 export const ThreadToolkit = Toolkit.make(
   ScheduledTaskRunTool,
   ThreadSearchTool,
+  ThreadMoveProjectTool,
   ThreadConfigureTool,
   ThreadTransferTool,
   ThreadOrganizeTool,
