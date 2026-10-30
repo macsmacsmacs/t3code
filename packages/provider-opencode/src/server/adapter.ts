@@ -2995,7 +2995,9 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
               turn.finalized ||
               turn.admissionGeneration !== generation
                 ? Effect.void
-                : Effect.logWarning("OpenCode command request failed.", { cause }).pipe(
+                : Effect.logWarning("OpenCode command request failed.", {
+                    errorTag: cause._tag,
+                  }).pipe(
                     Effect.andThen(
                       finalizeTurn(state, turn, "failed", {
                         failure: makeProviderFailure({ cause, class: "provider_error" }),
