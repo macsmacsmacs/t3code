@@ -59,6 +59,7 @@ import { PullRequestActivityUnavailableState } from "./PullRequestActivityUnavai
 import {
   filterPullRequestConversationItems,
   isPullRequestCommentFinished,
+  pullRequestFinishedCommentLabel,
   latestPullRequestReviewOutcomes,
   orderPullRequestComments,
   pagePullRequestConversationItems,
@@ -632,7 +633,7 @@ export function PullRequestSummaryTab({
           editing={commentEditing}
           detail={detail}
           thread={thread}
-          label={thread?.isResolved ? "Resolved" : "Review dismissed"}
+          label={pullRequestFinishedCommentLabel(comment, thread)}
           body={visibleBody(comment.body)}
           replyCount={item.kind === "thread" ? item.replies.length + item.moreReplies : 0}
           replies={replies}
@@ -879,7 +880,7 @@ export function PullRequestSummaryTab({
                       setCommentFilter((value) => ({ ...value, resolved }))
                     }
                   >
-                    Resolved or dismissed
+                    Resolved, dismissed or hidden
                   </MenuCheckboxItem>
                 </MenuGroup>
               </MenuPopup>

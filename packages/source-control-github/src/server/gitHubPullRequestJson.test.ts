@@ -450,6 +450,8 @@ describe("pull request detail decoding", () => {
                 (comment) => ({
                   lastEditedAt: null,
                   url: "https://github.com/c",
+                  isMinimized: false,
+                  minimizedReason: null,
                   author: null,
                   ...comment,
                 }),
@@ -461,6 +463,8 @@ describe("pull request detail decoding", () => {
                 (review) => ({
                   lastEditedAt: null,
                   url: "https://github.com/r",
+                  isMinimized: false,
+                  minimizedReason: null,
                   author: null,
                   submittedAt: null,
                   ...review,

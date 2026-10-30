@@ -30,6 +30,7 @@ import {
   filterPullRequestConversationItems,
   isPullRequestCommentFinished,
   pagePullRequestConversationItems,
+  pullRequestFinishedCommentLabel,
   pullRequestConversationItemComments,
   pullRequestConversationItems,
   handoffPrompt,
@@ -574,6 +575,24 @@ describe("review thread conversations", () => {
         (item) => item.id,
       ),
     ).toEqual(["c1"]);
+  });
+
+  it("labels a minimized comment with GitHub's wording, after resolution and dismissal", () => {
+    const hidden = (reason: string | null, reviewState: string | null = null) =>
+      pullRequestFinishedCommentLabel({ ...loose, reviewState, minimized: { reason } });
+    expect(hidden("RESOLVED")).toBe("Marked as resolved");
+    expect(hidden("OFF_TOPIC")).toBe("Marked as off-topic");
+    expect(hidden(null)).toBe("Hidden");
+    expect(hidden("OUTDATED", "DISMISSED")).toBe("Review dismissed");
+    expect(
+      pullRequestFinishedCommentLabel(
+        { ...loose, minimized: { reason: "SPAM" } },
+        {
+          ...thread,
+          isResolved: true,
+        },
+      ),
+    ).toBe("Resolved");
   });
 
   it("keeps bot review verdicts when bot comments are hidden", () => {
