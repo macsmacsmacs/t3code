@@ -1079,4 +1079,27 @@ describe("releaseManagedTunnelOnShutdown", () => {
       }),
     );
   });
+
+  it.effect("reports a check that ran after the managed tunnel config was stored", () => {
+    const { store } = makeMemorySecretStore(managedLinkSecrets);
+    const reachable = {
+      status: "reachable" as const,
+      checkedAt: "2026-10-29T00:00:00.000Z",
+      readyConnections: 4,
+      protocol: "quic",
+    };
+
+    return Effect.gen(function* () {
+      const state = yield* (yield* CloudLink.CloudLink).linkState();
+
+      expect(state.reachability).toEqual(reachable);
+    }).pipe(
+      provideReleaseHarness({
+        store,
+        applyConfigCalls: [],
+        requests: [],
+        latestReachability: Effect.succeedSome(reachable),
+      }),
+    );
+  });
 });
