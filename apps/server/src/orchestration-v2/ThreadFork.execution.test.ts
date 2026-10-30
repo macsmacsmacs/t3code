@@ -15,6 +15,7 @@ import {
   TurnItemId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -613,7 +614,7 @@ it.effect("a native fork whose source session is gone starts fresh with the sour
   const driver = ProviderDriverKind.make("claudeAgent");
   const instanceId = ProviderInstanceId.make("claudeAgent");
   const modelSelection = { instanceId, model: "test-model" };
-  const started: Array<ProviderAdapter.ProviderAdapterV2TurnInput> = [];
+  const started = Deferred.makeUnsafe<ProviderAdapter.ProviderAdapterV2TurnInput>();
   const adapter: ProviderAdapter.ProviderAdapterV2["Service"] = {
     instanceId,
     driver,
@@ -648,7 +649,7 @@ it.effect("a native fork whose source session is gone starts fresh with the sour
               updatedAt: now,
             }),
           resumeThread: ({ providerThread }) => Effect.succeed(providerThread),
-          startTurn: (turn) => Effect.sync(() => started.push(turn)),
+          startTurn: (turn) => Deferred.succeed(started, turn).pipe(Effect.asVoid),
           steerTurn: () => Effect.void,
           interruptTurn: () => Effect.void,
           respondToRuntimeRequest: () => Effect.void,
@@ -805,8 +806,10 @@ it.effect("a native fork whose source session is gone starts fresh with the sour
       [],
     );
     assert.equal(projection.runs[0]?.status, "running");
-    assert.lengthOf(started, 1);
-    assert.include(JSON.stringify(started[0]), "FORKED_SOURCE_MARKER");
+    // Resolving the fork transfer stops later sends from retrying the native fork.
+    assert.equal(projection.contextTransfers[0]?.status, "resolved_portable");
+    assert.isNull(projection.providerThreads[0]?.forkedFrom);
+    assert.include(JSON.stringify(yield* Deferred.await(started)), "FORKED_SOURCE_MARKER");
   }).pipe(
     Effect.provide(
       ProviderReplayHarness.layerWithRegistry(
