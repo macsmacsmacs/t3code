@@ -1890,7 +1890,7 @@ describe("mobile composer drafts", () => {
     expect(getComposerDraftSnapshot(second).text).toBe("second idea");
   });
 
-  it("retargets a new-task draft to another project without losing its text", () => {
+  it("retargets a new-task draft to another project, keeping only a pull request workspace", () => {
     const from = {
       environmentId: EnvironmentId.make("environment-1"),
       projectId: ProjectId.make("project-1"),
@@ -1921,17 +1921,7 @@ describe("mobile composer drafts", () => {
     expect(moved.project).toEqual({ ...to, createdAt });
     expect(findNewTaskDraftKeys(appAtomRegistry.get(composerDraftsAtom), from)).toEqual([]);
     expect(findNewTaskDraftKeys(appAtomRegistry.get(composerDraftsAtom), to)).toEqual([key]);
-  });
 
-  it("keeps a pull request worktree selection when the draft moves between machines and back", () => {
-    const from = {
-      environmentId: EnvironmentId.make("environment-1"),
-      projectId: ProjectId.make("project-1"),
-    };
-    const to = {
-      environmentId: EnvironmentId.make("environment-2"),
-      projectId: ProjectId.make("project-2"),
-    };
     const pullRequestSelection = {
       mode: "worktree" as const,
       branch: "feature/pr-head",
@@ -1939,17 +1929,12 @@ describe("mobile composer drafts", () => {
       startFromOrigin: false,
       pullRequestReference: "https://github.com/acme/repo/pull/42",
     };
-    const key = createNewTaskDraft(from);
-    setComposerDraftText(key, "Review this PR");
     updateComposerDraftSettings(key, { workspaceSelection: pullRequestSelection });
-
-    retargetNewTaskDraft(key, to, { keepPullRequestWorkspace: true });
-    expect(getComposerDraftSnapshot(key).workspaceSelection).toEqual(pullRequestSelection);
-
     retargetNewTaskDraft(key, from, { keepPullRequestWorkspace: true });
     expect(getComposerDraftSnapshot(key).workspaceSelection).toEqual(pullRequestSelection);
-
-    retargetNewTaskDraft(key, to);
+    retargetNewTaskDraft(key, to, { keepPullRequestWorkspace: true });
+    expect(getComposerDraftSnapshot(key).workspaceSelection).toEqual(pullRequestSelection);
+    retargetNewTaskDraft(key, from);
     expect(getComposerDraftSnapshot(key).workspaceSelection).toBeUndefined();
   });
 

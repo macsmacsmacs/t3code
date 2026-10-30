@@ -83,6 +83,7 @@ describe("resolveEnvironmentProjectMatch", () => {
       makeProject("t3code-clone", "server", { repositoryKey: "github.com/t3tools/t3code" }),
     ];
     expect(resolveEnvironmentProjectMatch(target, selected)).toBe(target[1]);
+    expect(isSameRepository(target[1]!, selected)).toBe(true);
   });
 
   it("falls back to workspace basename, then title, for unindexed projects", () => {
@@ -92,6 +93,7 @@ describe("resolveEnvironmentProjectMatch", () => {
       makeProject("srv", "server", { workspaceRoot: "/home/me/t3code" }),
     ];
     expect(resolveEnvironmentProjectMatch(byBasename, selected)).toBe(byBasename[1]);
+    expect(isSameRepository(byBasename[1]!, selected)).toBe(false);
 
     const byTitle = [
       makeProject("other", "server"),
@@ -113,21 +115,6 @@ describe("resolveEnvironmentProjectMatch", () => {
     const unindexed = makeProject("unindexed", "server", { workspaceRoot: "/srv/t3code" });
     expect(resolveEnvironmentProjectMatch([fork, unindexed], selected)).toBe(unindexed);
     expect(resolveEnvironmentProjectMatch([fork], selected)).toBe(fork);
-  });
-
-  it("vouches for the same repository only when both identities are known", () => {
-    const selected = makeProject("t3code", "mac", {
-      repositoryKey: "github.com/t3tools/t3code",
-      workspaceRoot: "/Users/me/t3code",
-    });
-    const clone = makeProject("clone", "server", { repositoryKey: "github.com/t3tools/t3code" });
-    const sameName = makeProject("same-name", "server", { workspaceRoot: "/srv/t3code" });
-    expect(isSameRepository(resolveEnvironmentProjectMatch([clone], selected), selected)).toBe(
-      true,
-    );
-    expect(isSameRepository(resolveEnvironmentProjectMatch([sameName], selected), selected)).toBe(
-      false,
-    );
   });
 });
 
