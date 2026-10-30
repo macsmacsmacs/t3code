@@ -16,6 +16,7 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
@@ -607,3 +608,211 @@ it.effect.each([
     );
   },
 );
+
+it.effect("a native fork whose source session is gone starts fresh with the source history", () => {
+  const driver = ProviderDriverKind.make("claudeAgent");
+  const instanceId = ProviderInstanceId.make("claudeAgent");
+  const modelSelection = { instanceId, model: "test-model" };
+  const started: Array<ProviderAdapter.ProviderAdapterV2TurnInput> = [];
+  const adapter: ProviderAdapter.ProviderAdapterV2["Service"] = {
+    instanceId,
+    driver,
+    getCapabilities: () => Effect.succeed(ClaudeProviderCapabilitiesV2),
+    planSelectionTransition: () => Effect.succeed({ type: "apply_on_next_turn" }),
+    openSession: (input) =>
+      Effect.gen(function* () {
+        const now = yield* DateTime.now;
+        return {
+          instanceId,
+          driver,
+          providerSessionId: input.providerSessionId,
+          providerSession: {
+            id: input.providerSessionId,
+            driver,
+            providerInstanceId: instanceId,
+            status: "ready",
+            cwd: "/tmp/fork-missing-native-source",
+            model: modelSelection.model,
+            capabilities: ClaudeProviderCapabilitiesV2,
+            createdAt: now,
+            updatedAt: now,
+            lastError: null,
+          },
+          events: Stream.never,
+          ensureThread: ({ threadId, existingProviderThread }) =>
+            Effect.succeed({
+              ...existingProviderThread!,
+              appThreadId: threadId,
+              nativeThreadRef: { driver, nativeId: "native-fresh-fork", strength: "strong" },
+              status: "idle",
+              updatedAt: now,
+            }),
+          resumeThread: ({ providerThread }) => Effect.succeed(providerThread),
+          startTurn: (turn) => Effect.sync(() => started.push(turn)),
+          steerTurn: () => Effect.void,
+          interruptTurn: () => Effect.void,
+          respondToRuntimeRequest: () => Effect.void,
+          readThreadSnapshot: () => Effect.die("unused"),
+          rollbackThread: () => Effect.die("unused"),
+          forkThread: ({ sourceProviderThread }) =>
+            Effect.fail(
+              new ProviderAdapter.ProviderAdapterForkThreadError({
+                driver,
+                providerThreadId: sourceProviderThread.id,
+                cause: "Session not found: native-deleted-source",
+              }),
+            ),
+        } satisfies ProviderAdapter.ProviderAdapterV2SessionRuntime;
+      }),
+  };
+  return Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const eventSink = yield* EventSink.EventSinkV2;
+    const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+    const now = yield* DateTime.now;
+    const sourceThreadId = ThreadId.make("fork-missing-source");
+    const targetThreadId = ThreadId.make("fork-missing-target");
+    const providerThreadId = ProviderThreadId.make("fork-missing-native-thread");
+    const sourceRunId = RunId.make("fork-missing-source-run");
+    const userMessageId = MessageId.make("fork-missing-source-message");
+
+    yield* orchestrator.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make("fork-missing-create-source"),
+      threadId: sourceThreadId,
+      projectId: ProjectId.make("fork-missing-project"),
+      title: "Fork missing source",
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      createdBy: "user",
+      creationSource: "web",
+    });
+    yield* eventSink.write({
+      events: [
+        {
+          id: EventId.make("fork-missing-provider-thread"),
+          type: "provider-thread.updated",
+          threadId: sourceThreadId,
+          occurredAt: now,
+          payload: {
+            id: providerThreadId,
+            driver,
+            providerInstanceId: instanceId,
+            providerSessionId: null,
+            appThreadId: sourceThreadId,
+            ownerNodeId: null,
+            nativeThreadRef: { driver, nativeId: "native-deleted-source", strength: "strong" },
+            nativeConversationHeadRef: null,
+            status: "idle",
+            firstRunOrdinal: 1,
+            lastRunOrdinal: 1,
+            handoffIds: [],
+            forkedFrom: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
+        {
+          id: EventId.make("fork-missing-source-run"),
+          type: "run.created",
+          threadId: sourceThreadId,
+          runId: sourceRunId,
+          occurredAt: now,
+          payload: {
+            id: sourceRunId,
+            threadId: sourceThreadId,
+            ordinal: 1,
+            providerInstanceId: instanceId,
+            modelSelection,
+            providerThreadId,
+            userMessageId,
+            rootNodeId: null,
+            activeAttemptId: null,
+            status: "completed",
+            queuePosition: null,
+            requestedAt: now,
+            startedAt: now,
+            completedAt: now,
+            checkpointId: null,
+            contextHandoffId: null,
+          },
+        },
+        {
+          id: EventId.make("fork-missing-user-item"),
+          type: "turn-item.updated",
+          threadId: sourceThreadId,
+          runId: sourceRunId,
+          occurredAt: now,
+          payload: {
+            id: TurnItemId.make("fork-missing-user-item"),
+            threadId: sourceThreadId,
+            runId: sourceRunId,
+            nodeId: null,
+            providerThreadId,
+            providerTurnId: null,
+            nativeItemRef: null,
+            parentItemId: null,
+            ordinal: 1,
+            status: "completed",
+            title: null,
+            startedAt: now,
+            completedAt: now,
+            updatedAt: now,
+            type: "user_message",
+            createdBy: "user",
+            creationSource: "web",
+            inputIntent: "turn_start",
+            messageId: userMessageId,
+            text: "FORKED_SOURCE_MARKER",
+            attachments: [],
+          },
+        },
+      ],
+    });
+    yield* orchestrator.dispatch({
+      type: "thread.fork",
+      commandId: CommandId.make("fork-missing-fork"),
+      sourceThreadId,
+      targetThreadId,
+      sourcePoint: { type: "run", runId: sourceRunId },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    yield* orchestrator.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make("fork-missing-continue"),
+      threadId: targetThreadId,
+      messageId: MessageId.make("fork-missing-continue"),
+      text: "Continue the fork",
+      attachments: [],
+      modelSelection,
+      dispatchMode: { type: "start_immediately" },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    // Run every start attempt so the last one runs with willRetry false.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      yield* worker.drain();
+      yield* TestClock.adjust("1 second");
+    }
+
+    const projection = yield* orchestrator.getThreadProjection(targetThreadId);
+    assert.deepEqual(
+      projection.turnItems.flatMap((item) => (item.type === "error" ? [item.title] : [])),
+      [],
+    );
+    assert.equal(projection.runs[0]?.status, "running");
+    assert.lengthOf(started, 1);
+    assert.include(JSON.stringify(started[0]), "FORKED_SOURCE_MARKER");
+  }).pipe(
+    Effect.provide(
+      ProviderReplayHarness.layerWithRegistry(
+        { name: "fork-missing-native-source" },
+        ProviderAdapterRegistry.layerFromAdapters([adapter]),
+      ),
+    ),
+  );
+});
