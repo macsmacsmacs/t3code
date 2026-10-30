@@ -4101,9 +4101,10 @@ export const copyDesktopBuildArtifacts = Effect.fn("copyDesktopBuildArtifacts")(
       continue;
 
     const to = path.join(outputDir, entry);
-    if (stat.type === "Directory") {
-      yield* fs.remove(to, { recursive: true, force: true });
-    }
+    // Replace whatever a reused output dir already holds at this path. fs.cp refuses to
+    // overwrite a directory with a file or a file with a directory, and only merges into
+    // an existing directory, so a stale entry of either type must go first.
+    yield* fs.remove(to, { recursive: true, force: true });
     yield* Effect.tryPromise(() =>
       NodeFSP.cp(from, to, {
         recursive: true,

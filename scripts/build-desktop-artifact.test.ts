@@ -1770,6 +1770,10 @@ it.effect("preserves packaged app directories from the dir target", () =>
     const filesOnly = yield* copyDesktopBuildArtifacts(stage, path.join(root, "files-only"));
     assert.deepEqual(filesOnly, [path.join(root, "files-only", "builder-debug.yml")]);
     assert.isFalse(yield* fs.exists(path.join(root, "files-only", "mac-arm64")));
+    yield* fs.remove(path.join(stage, "mac-arm64"), { recursive: true });
+    yield* fs.writeFileString(path.join(stage, "mac-arm64"), "flattened");
+    yield* copyDesktopBuildArtifacts(stage, output, true);
+    assert.equal(yield* fs.readFileString(path.join(output, "mac-arm64")), "flattened");
   }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
 );
 
