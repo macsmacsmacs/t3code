@@ -1943,11 +1943,14 @@ describe("mobile composer drafts", () => {
     setComposerDraftText(key, "Review this PR");
     updateComposerDraftSettings(key, { workspaceSelection: pullRequestSelection });
 
-    retargetNewTaskDraft(key, to);
+    retargetNewTaskDraft(key, to, { keepPullRequestWorkspace: true });
     expect(getComposerDraftSnapshot(key).workspaceSelection).toEqual(pullRequestSelection);
 
-    retargetNewTaskDraft(key, from);
+    retargetNewTaskDraft(key, from, { keepPullRequestWorkspace: true });
     expect(getComposerDraftSnapshot(key).workspaceSelection).toEqual(pullRequestSelection);
+
+    retargetNewTaskDraft(key, to);
+    expect(getComposerDraftSnapshot(key).workspaceSelection).toBeUndefined();
   });
 
   it("merges persisted option memory without replacing newer choices", async () => {
