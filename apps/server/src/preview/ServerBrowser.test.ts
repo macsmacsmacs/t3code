@@ -24,6 +24,7 @@ import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import type { BrowserContext, Page } from "playwright-core";
 import { beforeEach, expect, vi } from "vite-plus/test";
 
@@ -90,6 +91,7 @@ function makeSession(frame?: ReturnType<typeof makeFrame>) {
     emit: (name: string) => events.emit(name),
     detach: vi.fn(async () => {}),
     send: vi.fn(async (method: string, input?: unknown): Promise<Record<string, unknown>> => {
+      if (stalledRenderer && STALLED_RENDERER_METHODS.has(method)) await stalledRenderer();
       if (method === "Page.getNavigationHistory") return { currentIndex: 0, entries: [{}] };
       if (method === "Page.getLayoutMetrics") return { cssVisualViewport: { pageX: 0, pageY: 0 } };
       if (method === "Page.captureScreenshot") {
@@ -262,6 +264,13 @@ const contexts: ReturnType<typeof makeContext>[] = [];
 const encoderStreams: Array<{ frameRate: number | undefined; bitsPerSecond: number }> = [];
 const contextRequests: Array<{ profileId: string; isolated: boolean }> = [];
 let contextGate: PromiseWithResolvers<void> | null = null;
+// A renderer whose main thread is stuck never answers these.
+const STALLED_RENDERER_METHODS = new Set([
+  "Page.startScreencast",
+  "Page.stopScreencast",
+  "Page.captureScreenshot",
+]);
+let stalledRenderer: (() => Promise<void>) | null = null;
 let pageCopy = "";
 let keyCopy = "";
 let focusedFrame: ReturnType<typeof makeFrame> | null = null;
@@ -373,6 +382,7 @@ beforeEach(() => {
   encoderStreams.length = 0;
   contextRequests.length = 0;
   contextGate = null;
+  stalledRenderer = null;
   contextFailure = null;
   initialNavigation = null;
   pageCopy = "";
@@ -644,6 +654,44 @@ it.live("enforces provider ownership and explicit targets when a session has mul
       });
       expect(result).toBe("evaluated");
       expect(contexts).toHaveLength(2);
+    }),
+  ).pipe(Effect.provide(layer)),
+);
+
+it.effect("a viewer attaches to a tab whose renderer never answers the screencast", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { browser, tabId } = yield* ready;
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      yield* Effect.addFinalizer(() => Effect.sync(() => vi.useRealTimers()));
+      const stalled = Promise.withResolvers<void>();
+      const renderer = Promise.withResolvers<void>();
+      stalledRenderer = () => {
+        stalled.resolve();
+        return renderer.promise;
+      };
+      const attaching = yield* browser
+        .attachViewer(viewerInput(tabId, true))
+        .pipe(Effect.forkScoped);
+      yield* Effect.promise(() => stalled.promise);
+      // Runs before the viewer's own finalizers, which stop the screencast.
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          stalledRenderer = null;
+          renderer.resolve();
+        }),
+      );
+      yield* TestClock.adjust("2 minutes");
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(120_000));
+
+      const attached = attaching.pollUnsafe();
+      expect(
+        attached,
+        "attachViewer never returned while the renderer was unresponsive",
+      ).toBeDefined();
+      const viewer = yield* Fiber.join(attaching);
+      const outputs = yield* Queue.takeAll(viewer.output);
+      expect(outputs).toContainEqual(expect.objectContaining({ _tag: "control" }));
     }),
   ).pipe(Effect.provide(layer)),
 );
