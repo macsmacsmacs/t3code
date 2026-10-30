@@ -343,7 +343,10 @@ export const reconcileOpenCodePromptAdmissionStatus = Effect.fn(
   if (admission.admissionGeneration !== generation || !admission.admissionPending) {
     return "stale" as const;
   }
-  const status = yield* readStatus;
+  const status = yield* readStatus.pipe(
+    Effect.timeoutOption("10 seconds"),
+    Effect.map(Option.getOrElse(() => "unknown" as const)),
+  );
   if (admission.admissionGeneration !== generation || !admission.admissionPending) {
     return "stale" as const;
   }
@@ -2136,8 +2139,10 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
             const status = yield* reconcileOpenCodePromptAdmissionStatus(
               turn,
               generation,
-              sdkCall("session.status", { sessionID: state.nativeSessionId, generation }, () =>
-                client.session.status(),
+              sdkCall(
+                "session.status",
+                { sessionID: state.nativeSessionId, generation },
+                (signal) => client.session.status(undefined, { signal }),
               ).pipe(
                 Effect.match({
                   onFailure: () => "unknown" as const,
