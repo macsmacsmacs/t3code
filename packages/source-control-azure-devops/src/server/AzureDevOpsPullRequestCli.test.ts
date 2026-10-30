@@ -1,8 +1,7 @@
-import * as NodeFS from "node:fs";
-
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { afterEach, assert, expect, it, vi } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import { ChildProcessSpawner } from "effect/process";
 
@@ -14,7 +13,7 @@ const mockedExecute = vi.fn<AzureDevOpsCli.AzureDevOpsCli["Service"]["execute"]>
 
 const layer = it.layer(
   AzureDevOpsPullRequestCli.layer.pipe(
-    Layer.provide(
+    Layer.provideMerge(
       Layer.mergeAll(
         Layer.mock(AzureDevOpsCli.AzureDevOpsCli)({
           execute: mockedExecute,
@@ -332,32 +331,21 @@ layer("AzureDevOpsPullRequestCli.layer", (it) => {
     }),
   );
 
-  it.effect("sends a description that starts with a dash as one value, not as a flag", () =>
-    Effect.gen(function* () {
-      mockedExecute.mockReturnValue(Effect.succeed(output("{}")));
-      const cli = yield* AzureDevOpsPullRequestCli.AzureDevOpsPullRequestCli;
-
-      yield* cli.updatePullRequest({
-        cwd: "/w",
-        number: 42,
-        body: "- rewrote the page\n- kept the rest",
-      });
-
-      expect(argsOfCall(0)).toContain("--description=- rewrote the page\n- kept the rest");
-    }),
-  );
-
   it.effect("sends a multi-line description through a file, which survives a Windows az.cmd", () =>
     Effect.gen(function* () {
       const body = "## Summary\n\nline two\nline three";
+      const fileSystem = yield* FileSystem.FileSystem;
       let sentDescription: string | undefined;
       mockedExecute.mockImplementation((input) => {
         const file = input.args.find((arg) => arg.startsWith("--description=@"));
-        sentDescription =
-          file === undefined
-            ? undefined
-            : NodeFS.readFileSync(file.slice("--description=@".length), "utf8");
-        return Effect.succeed(output("{}"));
+        if (file === undefined) return Effect.succeed(output("{}"));
+        return fileSystem.readFileString(file.slice("--description=@".length)).pipe(
+          Effect.map((content) => {
+            sentDescription = content;
+            return output("{}");
+          }),
+          Effect.orDie,
+        );
       });
       const cli = yield* AzureDevOpsPullRequestCli.AzureDevOpsPullRequestCli;
 
