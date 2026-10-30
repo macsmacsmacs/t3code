@@ -5,6 +5,7 @@ import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import type { HomeProjectScope } from "../home/homeThreadList";
 import {
   getProjectScopeSelectionTarget,
+  isSameRepository,
   newTaskDestination,
   resolveDraftProjectSelection,
   resolveEnvironmentProjectMatch,
@@ -112,6 +113,21 @@ describe("resolveEnvironmentProjectMatch", () => {
     const unindexed = makeProject("unindexed", "server", { workspaceRoot: "/srv/t3code" });
     expect(resolveEnvironmentProjectMatch([fork, unindexed], selected)).toBe(unindexed);
     expect(resolveEnvironmentProjectMatch([fork], selected)).toBe(fork);
+  });
+
+  it("vouches for the same repository only when both identities are known", () => {
+    const selected = makeProject("t3code", "mac", {
+      repositoryKey: "github.com/t3tools/t3code",
+      workspaceRoot: "/Users/me/t3code",
+    });
+    const clone = makeProject("clone", "server", { repositoryKey: "github.com/t3tools/t3code" });
+    const sameName = makeProject("same-name", "server", { workspaceRoot: "/srv/t3code" });
+    expect(isSameRepository(resolveEnvironmentProjectMatch([clone], selected), selected)).toBe(
+      true,
+    );
+    expect(isSameRepository(resolveEnvironmentProjectMatch([sameName], selected), selected)).toBe(
+      false,
+    );
   });
 });
 
