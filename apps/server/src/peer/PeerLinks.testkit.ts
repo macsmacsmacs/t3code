@@ -135,7 +135,7 @@ export const servePeer = <E, R>(
       bearers,
       /** How often its descriptor was asked for, as a probe of whether it answers. */
       probes,
-      /** The sessions linking created there, which its Connections lists. */
+      /** The sessions linking created there, which its Sharing & access lists. */
       linkedSessions: auth
         .listSessions()
         .pipe(

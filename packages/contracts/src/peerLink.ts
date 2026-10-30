@@ -7,7 +7,7 @@ import { EnvironmentId, ThreadId, TrimmedNonEmptyString, TurnItemId } from "./ba
  * A link from this environment to another one (the peer). This environment
  * signed in to the peer's `/mcp` as an outside agent, with a pairing code from
  * the peer, so its agents can work there. The peer enforces the access chosen
- * at linking, and revokes the link from its own Connections.
+ * at linking, and revokes the link from its own Sharing & access.
  */
 export const PeerLink = Schema.Struct({
   environmentId: EnvironmentId,
@@ -37,7 +37,7 @@ export const PeerLinkCreateInput = Schema.Struct({
   url: TrimmedNonEmptyString,
   /** More addresses for the same peer, tried after `url`. */
   alternateUrls: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
-  /** A pairing code from the peer (`t3 pair` there, or its Connections settings). */
+  /** A pairing code from the peer (`t3 pair` there, or its Sharing & access settings). */
   pairingCode: TrimmedNonEmptyString,
   access: AuthMcpClientAccess,
   /**
