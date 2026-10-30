@@ -1774,9 +1774,8 @@ const make = Effect.gen(function* () {
     interactionModeRank(modes.interactionMode) <= interactionModeRank(limits.interactionMode);
 
   /**
-   * Its webhook URL is a bearer credential that starts runs, so only the save that issues it
-   * returns it, and only to a caller that may start one: never a client approved for read-only
-   * access, and a thread caller only with a live turn, at modes covering every mode the task runs at.
+   * Creation returns a webhook URL only to callers allowed to start its runs: never a read-only
+   * client, and a thread caller only with a live turn at modes covering every mode the task runs at.
    */
   const summarizeScheduledTask = Effect.fn("OrchestratorMcpService.summarizeScheduledTask")(
     function* (
@@ -1961,10 +1960,7 @@ const make = Effect.gen(function* () {
               failure("orchestration_error", `Could not update scheduled task: ${error.message}`),
             ),
           );
-        // The path carries the token, so it changes only when this save issued a new URL.
-        return task.webhook?.path === existing.webhook?.path
-          ? scheduledTaskSummary(task, false)
-          : yield* summarizeScheduledTask(scope, { parent, limits }, task);
+        return scheduledTaskSummary(task, false);
       },
     ),
     deleteScheduledTask: Effect.fn("OrchestratorMcpService.deleteScheduledTask")(
