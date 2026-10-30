@@ -168,15 +168,17 @@ export const readOpenCodeUsage = Effect.fn("readOpenCodeUsage")(function* (
           ),
         );
         const timestamp = columns.has("time_created") ? "time_created" : "NULL";
-        // User messages can hold hundreds of MB of diffs; keep and project only usage fields in SQL.
-        // JSON functions raise on malformed input, so guard them like JSON.parse would skip it.
-        const predicates = [
+        const predicates = table === "session_message" ? ["type = 'assistant'"] : [];
+        if (timestamp !== "NULL") predicates.push("time_created >= ?");
+        // User messages can hold hundreds of MB of diffs, so filter and project usage fields in SQL.
+        // JSON functions raise on malformed rows; the guard skips them as JSON.parse did. It goes
+        // last so rows outside the window are rejected before their bodies are parsed.
+        predicates.push(
+          "rowid > ?",
+          "rowid <= ?",
           `CASE WHEN typeof(data) = 'text' AND json_valid(data)
            THEN json_type(data, '$.role') IS NULL OR data ->> '$.role' = 'assistant' END`,
-        ];
-        if (table === "session_message") predicates.push("type = 'assistant'");
-        if (timestamp !== "NULL") predicates.push("time_created >= ?");
-        predicates.push("rowid > ?", "rowid <= ?");
+        );
         const [range] = yield* sql.unsafe<{
           readonly first_row_id: number | null;
           readonly last_row_id: number | null;
