@@ -32,12 +32,32 @@ function isCursorShellSpawnFailure(reason: unknown): boolean {
 }
 
 /**
- * After a local exec fails, the SDK writes a final frame to the exec's stream from
- * a promise nothing awaits. If that stream has already closed, the write rejects.
- * The SDK's class is minified, so only its `name` identifies it.
+ * The SDK writes final frames from promises nothing awaits. A closed stream rejects them
+ * with WriteIterableClosedError; an ended request body with the Aborted ConnectError its
+ * pump made from ERR_STREAM_WRITE_AFTER_END somewhere in the cause chain. The classes are
+ * minified, so only `name` identifies them.
  */
 function isCursorClosedStreamWrite(reason: unknown): boolean {
-  return reason instanceof Error && reason.name === "WriteIterableClosedError";
+  if (!(reason instanceof Error)) {
+    return false;
+  }
+  if (reason.name === "WriteIterableClosedError") {
+    return true;
+  }
+  if (reason.name !== "ConnectError") {
+    return false;
+  }
+  const seen = new Set<unknown>();
+  for (let cause: unknown = reason.cause; cause instanceof Error; cause = cause.cause) {
+    if (seen.has(cause)) {
+      return false;
+    }
+    seen.add(cause);
+    if (Reflect.get(cause, "code") === "ERR_STREAM_WRITE_AFTER_END") {
+      return true;
+    }
+  }
+  return false;
 }
 
 function onUnhandledRejection(reason: unknown): void {
@@ -46,7 +66,7 @@ function onUnhandledRejection(reason: unknown): void {
     return;
   }
   if (isCursorClosedStreamWrite(reason)) {
-    console.error("Cursor SDK wrote to a closed exec stream. The server will keep running.");
+    console.error("Cursor SDK wrote to a closed stream. The server will keep running.");
     return;
   }
   if (process.listenerCount("unhandledRejection") > 1) {

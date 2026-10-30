@@ -59,4 +59,15 @@ describe("CursorSdk unhandled rejection guard", () => {
       ]);
     }),
   );
+
+  it.effect("still exits on aborted requests other than a write after end", () =>
+    Effect.gen(function* () {
+      const cause = Object.assign(new Error("socket hang up"), { code: "ECONNRESET" });
+      const reason = Object.assign(new Error("[aborted] socket hang up", { cause }), {
+        name: "ConnectError",
+        code: 10,
+      });
+      assert.deepStrictEqual(yield* rejectThroughGuard(reason), [[1]]);
+    }),
+  );
 });
