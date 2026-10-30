@@ -1131,6 +1131,22 @@ describe("rightPanelStore", () => {
     });
   });
 
+  it("keeps one context surface per thread, refocuses it, and restores it after reload", async () => {
+    const store = useRightPanelStore.getState();
+    store.open(refA, "context");
+    store.open(refA, "diff");
+    store.open(refA, "context");
+    store.open(refB, "context");
+
+    const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+    expect(state.surfaces.filter((surface) => surface.kind === "context")).toHaveLength(1);
+    expect(state.activeSurfaceId).toBe("context");
+
+    await reloadRightPanelStore();
+    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe("context");
+    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refB)).toBe("context");
+  });
+
   it("closing the active surface activates a neighboring surface", () => {
     useRightPanelStore.getState().openBrowser(refA, "tab-a");
     useRightPanelStore.getState().openTerminal(refA, "term-1");

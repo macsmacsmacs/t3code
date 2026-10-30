@@ -2,8 +2,10 @@ import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3
 import { describe, expect, it } from "vite-plus/test";
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import {
+  formatContextWindowPercentage,
   hasAvailableCompactionProvider,
   hasDismissedResumeCompaction,
+  isContextWindowOverloaded,
   resolveContextWindowModelDisplayName,
   shouldReserveContextWindowMeter,
 } from "./ContextWindowMeter.logic";
@@ -155,5 +157,17 @@ describe("shouldReserveContextWindowMeter", () => {
         providerReportsContextWindow: null,
       }),
     ).toBe(true);
+  });
+});
+
+describe("context window usage level", () => {
+  it("formats the percentage and flags overload only past 90%", () => {
+    expect(formatContextWindowPercentage(null)).toBeNull();
+    expect(formatContextWindowPercentage(4.04)).toBe("4%");
+    expect(formatContextWindowPercentage(4.5)).toBe("4.5%");
+    expect(formatContextWindowPercentage(72.4)).toBe("72%");
+    expect(isContextWindowOverloaded(null)).toBe(false);
+    expect(isContextWindowOverloaded(90)).toBe(false);
+    expect(isContextWindowOverloaded(90.5)).toBe(true);
   });
 });

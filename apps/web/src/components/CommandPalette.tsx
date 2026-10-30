@@ -61,6 +61,7 @@ import {
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
+  GaugeIcon,
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
@@ -214,6 +215,7 @@ import {
 } from "./CommandPaletteAddProject";
 import { useCommandPaletteThreadItems } from "./CommandPaletteThreadItems";
 import { useCommandPaletteThemeItems } from "./CommandPaletteThemeItems";
+import { buildThreadAccentItem } from "./CommandPaletteThreadAccentItem";
 import {
   CommandPaletteVirtualizedResults,
   scrollCommandPaletteRowIntoView,
@@ -1322,6 +1324,26 @@ function OpenCommandPaletteDialog(props: {
         useRightPanelStore.getState().open(threadRef, "pull-requests");
       },
     });
+  }
+
+  if (activeThread !== null) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:open-thread-context",
+      searchTerms: ["context", "window", "tokens", "usage"],
+      title: "Show context window",
+      icon: <GaugeIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        useRightPanelStore.getState().open(threadRef, "context");
+      },
+    });
+  }
+
+  if (activeThread !== null) {
+    actionItems.push(
+      buildThreadAccentItem(scopeThreadRef(activeThread.environmentId, activeThread.id)),
+    );
   }
 
   if (activeThread !== null && canShareActiveThreadWithGuest) {

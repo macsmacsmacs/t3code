@@ -1,6 +1,8 @@
 import type { ContextMenuItem } from "@t3tools/contracts";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
+import { THREAD_ACCENTS, type ThreadAccentId } from "../threadAccent";
+
 export type ThreadActionMenuId =
   | "find"
   | "new-thread-on-branch"
@@ -21,6 +23,8 @@ export type ThreadActionMenuId =
   | "regenerate-title"
   | "mark-unread"
   | "share-guest"
+  | "accent"
+  | `accent:${string}`
   | "copy"
   | "copy-path"
   | "copy-branch"
@@ -95,22 +99,27 @@ export interface ThreadActionMenuState {
   readonly canShareWithGuest?: boolean;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
+  /** The accent color is saved on this device, so setting it needs no server permission. */
+  readonly accentId?: ThreadAccentId | null;
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
 export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean {
-  return ![
-    "find",
-    "new-thread-on-branch",
-    "project-settings",
-    "mark-unread",
-    "share-guest",
-    "copy",
-    "copy-path",
-    "copy-branch",
-    "copy-thread",
-    "copy-thread-id",
-  ].includes(action);
+  return (
+    !action.startsWith("accent") &&
+    ![
+      "find",
+      "new-thread-on-branch",
+      "project-settings",
+      "mark-unread",
+      "share-guest",
+      "copy",
+      "copy-path",
+      "copy-branch",
+      "copy-thread",
+      "copy-thread-id",
+    ].includes(action)
+  );
 }
 
 export function buildThreadActionMenuItems(
@@ -181,6 +190,23 @@ export function buildThreadActionMenuItems(
     ...(state.canShareWithGuest
       ? [{ id: "share-guest" as const, label: "Share with guest", icon: "user-plus" }]
       : []),
+    {
+      id: "accent",
+      label: "Accent color",
+      children: [
+        ...THREAD_ACCENTS.map(({ id, label }) => ({
+          id: `accent:${id}` as const,
+          label,
+          checked: state.accentId === id,
+        })),
+        {
+          id: "accent:none" as const,
+          label: "None",
+          checked: state.accentId == null,
+          separatorBefore: true,
+        },
+      ],
+    },
     ...(state.projectFilter
       ? [
           {

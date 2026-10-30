@@ -29,6 +29,13 @@ The controls retreat as the composer docks after you send the first message.
 Turn on **Composer context** to keep those controls visible after the thread starts. This preference
 applies to the web and desktop clients.
 
+## Thread accent color
+
+To tell threads apart at a glance, give a thread an accent color: right-click it in the sidebar (or
+click its title) and choose **Accent color**, or run **Set thread accent color** in the command palette
+on the open thread. The color shows as a dot in the sidebar and next to the title. Choose **None** to
+remove it. Accent colors are saved on this device or browser only, on web and desktop.
+
 ## Math
 
 Turn on **Render math** in **Settings → Appearance** to typeset LaTeX in messages and Markdown
