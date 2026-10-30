@@ -1911,7 +1911,7 @@ describe("mobile composer drafts", () => {
     });
     const createdAt = getComposerDraftSnapshot(key).project?.createdAt;
 
-    retargetNewTaskDraft(key, to);
+    retargetNewTaskDraft(key, to, { keepPullRequestWorkspace: true });
 
     const moved = getComposerDraftSnapshot(key);
     expect(moved.text).toBe("moving house");
