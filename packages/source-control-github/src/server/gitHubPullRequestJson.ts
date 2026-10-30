@@ -635,6 +635,12 @@ interface RemarkFields {
   readonly author: ActorFields | null;
   readonly body: string;
   readonly url: string | null;
+  readonly isMinimized: boolean;
+  readonly minimizedReason: string | null;
+}
+
+function toMinimized(remark: RemarkFields): Pick<PullRequestComment, "minimized"> {
+  return remark.isMinimized ? { minimized: { reason: trimmed(remark.minimizedReason) } } : {};
 }
 
 function toComments(raw: {
@@ -653,6 +659,7 @@ function toComments(raw: {
     url: trimmed(comment.url),
     path: null,
     reviewState: null,
+    ...toMinimized(comment),
   }));
   // Bodiless COMMENTED reviews only hold line comments read separately.
   const reviews = raw.reviews.flatMap((review): ReadonlyArray<PullRequestComment> => {
@@ -675,6 +682,7 @@ function toComments(raw: {
         url: trimmed(review.url),
         path: null,
         reviewState,
+        ...toMinimized(review),
       },
     ];
   });

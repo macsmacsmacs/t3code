@@ -273,6 +273,8 @@ query PullRequestActivity(
           createdAt
           lastEditedAt
           url
+          isMinimized
+          minimizedReason
           author {
             login
             avatarUrl
@@ -294,6 +296,8 @@ query PullRequestActivity(
           submittedAt
           lastEditedAt
           url
+          isMinimized
+          minimizedReason
           author {
             login
             avatarUrl

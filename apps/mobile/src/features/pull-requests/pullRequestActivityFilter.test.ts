@@ -72,4 +72,18 @@ describe("mobile activity filters", () => {
     );
     expect(result.activity.comments.map((entry) => entry.id)).toEqual(["approved", "changes"]);
   });
+
+  it("hides a comment the host minimized with resolved conversations", () => {
+    const minimized = { ...comment("minimized"), minimized: { reason: "RESOLVED" } };
+    const withMinimized = { ...activity, comments: [comment("human"), minimized] };
+    expect(
+      filterPullRequestActivity(withMinimized, DEFAULT_ACTIVITY_FILTER).activity.comments.map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(["human"]);
+    expect(
+      filterPullRequestActivity(withMinimized, { ...DEFAULT_ACTIVITY_FILTER, resolved: true })
+        .activity.comments,
+    ).toHaveLength(2);
+  });
 });

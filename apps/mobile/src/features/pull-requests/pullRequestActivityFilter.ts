@@ -57,7 +57,9 @@ export function filterPullRequestActivity(activity: PullRequestActivity, filter:
           (comment) =>
             !allDiscussionIds.has(comment.id) &&
             (filter.bots || !isBot(comment.author) || isVerdict(comment.reviewState)) &&
-            (filter.resolved || comment.reviewState?.trim().toLowerCase() !== "dismissed"),
+            (filter.resolved ||
+              (comment.reviewState?.trim().toLowerCase() !== "dismissed" &&
+                comment.minimized === undefined)),
         );
   const filtered = {
     ...activity,

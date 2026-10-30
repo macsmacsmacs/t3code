@@ -617,8 +617,24 @@ export function isPullRequestCommentFinished(
   thread?: PullRequestReviewThread,
 ): boolean {
   return (
-    thread?.isResolved === true || pullRequestReviewOutcome(comment.reviewState) === "dismissed"
+    thread?.isResolved === true ||
+    pullRequestReviewOutcome(comment.reviewState) === "dismissed" ||
+    comment.minimized !== undefined
   );
+}
+
+export function pullRequestFinishedCommentLabel(
+  comment: PullRequestComment,
+  thread?: PullRequestReviewThread,
+): string {
+  if (thread?.isResolved === true) return "Resolved";
+  const { minimized } = comment;
+  if (minimized === undefined || pullRequestReviewOutcome(comment.reviewState) === "dismissed") {
+    return "Review dismissed";
+  }
+  if (minimized.reason === null) return "Hidden";
+  // GitHub reports RESOLVED or OFF_TOPIC where its UI says "resolved" or "off-topic".
+  return `Marked as ${minimized.reason.toLowerCase().replaceAll("_", "-")}`;
 }
 
 function isPullRequestVerdict(reviewState: string | null): boolean {

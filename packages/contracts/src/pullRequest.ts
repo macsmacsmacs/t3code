@@ -152,6 +152,8 @@ export const PullRequestComment = Schema.Struct({
   reviewState: Schema.NullOr(Schema.String),
   reactions: Schema.optional(Schema.Array(PullRequestReaction)),
   canEdit: Schema.optional(Schema.Boolean),
+  /** Present when the host hid the comment; `reason` is the host's own, e.g. GitHub's `RESOLVED`. */
+  minimized: Schema.optional(Schema.Struct({ reason: Schema.NullOr(Schema.String) })),
 });
 export type PullRequestComment = typeof PullRequestComment.Type;
 

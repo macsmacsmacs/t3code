@@ -450,6 +450,8 @@ describe("pull request detail decoding", () => {
                 (comment) => ({
                   lastEditedAt: null,
                   url: "https://github.com/c",
+                  isMinimized: false,
+                  minimizedReason: null,
                   author: null,
                   ...comment,
                 }),
@@ -461,6 +463,8 @@ describe("pull request detail decoding", () => {
                 (review) => ({
                   lastEditedAt: null,
                   url: "https://github.com/r",
+                  isMinimized: false,
+                  minimizedReason: null,
                   author: null,
                   submittedAt: null,
                   ...review,
@@ -580,6 +584,45 @@ describe("pull request detail decoding", () => {
     const detail = expectSuccess(activity(JSON.parse(detailJson) as Record<string, unknown>));
     expect(detail.comments.map((comment) => comment.id)).toEqual(["r1", "c1", "r2"]);
     expect(detail.comments.at(-1)?.reviewState).toBe("APPROVED");
+  });
+
+  it("marks a comment or review the host minimized, with its reason", () => {
+    const detail = expectSuccess(
+      activity({
+        comments: [
+          {
+            id: "c1",
+            body: "Fixed in the next push.",
+            createdAt: "2026-07-04T00:00:00Z",
+            isMinimized: true,
+            minimizedReason: "RESOLVED",
+          },
+          {
+            id: "c2",
+            body: "Still broken on Windows.",
+            createdAt: "2026-07-05T00:00:00Z",
+            isMinimized: false,
+            minimizedReason: null,
+          },
+        ],
+        reviews: [
+          {
+            id: "r1",
+            body: "Stale bot summary.",
+            state: "COMMENTED",
+            submittedAt: "2026-07-06T00:00:00Z",
+            isMinimized: true,
+            minimizedReason: "OUTDATED",
+          },
+        ],
+      }),
+    );
+
+    expect(detail.comments.map((comment) => [comment.id, comment.minimized])).toEqual([
+      ["c1", { reason: "RESOLVED" }],
+      ["c2", undefined],
+      ["r1", { reason: "OUTDATED" }],
+    ]);
   });
 
   it("drops the bodyless review GitHub opens to hold line comments", () => {
