@@ -14,7 +14,7 @@ vi.mock("@effect/atom-react", async (original) => ({
 }));
 vi.mock("../hooks/useTheme", () => ({
   useRenderedAppearance: () => "light",
-  useTheme: () => ({ theme: "default", resolvedTheme: "light", appearanceMode: "light" }),
+  useTheme: () => ({ theme: "t3-chat", resolvedTheme: "light", appearanceMode: "light" }),
 }));
 vi.mock("../hooks/useCustomThemes", () => ({ useCustomThemes: () => [] }));
 vi.mock("../hooks/useEnvironmentTheme", () => ({ useEnvironmentThemeDefinitions: () => [] }));
@@ -27,7 +27,13 @@ vi.mock("../hooks/useScratchProject", () => ({
 }));
 vi.mock("../hooks/useNewProject", () => ({ useNewProject: () => async () => undefined }));
 vi.mock("../hooks/useHandleNewThread", () => ({
-  useHandleNewThread: () => ({ handleNewThread: async () => undefined }),
+  useHandleNewThread: () => ({
+    activeDraftThread: null,
+    activeThread: null,
+    defaultProjectRef: null,
+    handleNewThread: async () => undefined,
+  }),
+  useNewThreadHandler: () => async () => undefined,
 }));
 vi.mock("../hooks/useOpenPanelPullRequestUrl", () => ({ useOpenPanelPullRequestUrl: () => null }));
 vi.mock("../connection/useDesktopLocalBootstraps", () => ({ useDesktopLocalBootstraps: () => [] }));
@@ -65,7 +71,11 @@ vi.mock("../state/entities", async (original) => ({
 }));
 vi.mock("../state/queries", async (original) => ({
   ...(await original<typeof import("../state/queries")>()),
-  useThreadSearch: () => ({ matches: [] }),
+  useThreadSearch: (_environmentIds: unknown, query: string) => ({
+    matches: [],
+    query,
+    isPending: false,
+  }),
 }));
 vi.mock("../state/session", async (original) => ({
   ...(await original<typeof import("../state/session")>()),
