@@ -131,6 +131,7 @@ describe("CursorTextGeneration", () => {
 
       expect(generated.subject).toBe("Add generated commit message");
       expect(cursorSdkMock.create).toHaveBeenCalledTimes(2);
+      expect(cursorSdkMock.close).toHaveBeenCalledTimes(2);
       expect(cursorSdkMock.create.mock.calls[0]?.[0]).toMatchObject({
         local: { sandboxOptions: { enabled: true } },
       });
