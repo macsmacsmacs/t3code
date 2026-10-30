@@ -78,6 +78,7 @@ import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import * as ManagedProjectFolders from "../project/ManagedProjectFolders.ts";
 import * as ScratchThreadPromotion from "../project/ScratchThreadPromotion.ts";
+import * as ThreadProjectMove from "../project/ThreadProjectMove.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
@@ -6594,6 +6595,290 @@ it.layer(layerSharedApplicationDataPlaneTest)("snooze projection", (it) => {
       const stayed = shell.threads.find((thread) => thread.id === busyThreadId);
       assert.equal(stayed?.projectId, scratchProjectId);
     }),
+  );
+
+  it.effect("moves an idle thread to an existing project's workspace", () =>
+    Effect.gen(function* () {
+      const projects = yield* ProjectService.ProjectService;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const outbox = yield* EffectOutbox.EffectOutboxV2;
+      const source = ProjectId.make("runtime-layer-move-source");
+      const target = ProjectId.make("runtime-layer-move-target");
+      const threadId = ThreadId.make("runtime-layer-move-thread");
+      for (const [projectId, workspaceRoot] of [
+        [source, "/tmp/move-source"],
+        [target, "/tmp/move-target"],
+      ] as const) {
+        yield* projects.create({
+          commandId: CommandId.make(`${projectId}-create`),
+          projectId,
+          title: projectId,
+          workspaceRoot,
+        });
+      }
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-move-create"),
+        threadId,
+        projectId: source,
+        title: "Move me",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: "old-branch",
+        worktreePath: "/tmp/move-source/worktree",
+      });
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-move-prior-message"),
+        threadId,
+        messageId: MessageId.make("runtime-layer-move-prior-message"),
+        text: "Keep this conversation.",
+        attachments: [],
+        modelSelection,
+        dispatchMode: { type: "start_immediately" },
+      });
+      const previous = yield* orchestrator.getThreadProjection(threadId);
+      const previousRun = previous.runs[0]!;
+      const providerThread = previous.providerThreads[0]!;
+      const now = yield* DateTime.now;
+      yield* eventSink.write({
+        events: [
+          {
+            id: EventId.make("runtime-layer-move-prior-completed"),
+            type: "run.updated",
+            threadId,
+            runId: previousRun.id,
+            occurredAt: now,
+            payload: { ...previousRun, status: "completed", startedAt: now, completedAt: now },
+          },
+          {
+            id: EventId.make("runtime-layer-move-provider-idle"),
+            type: "provider-thread.updated",
+            threadId,
+            occurredAt: now,
+            payload: { ...providerThread, status: "idle", updatedAt: now },
+          },
+          {
+            id: EventId.make("runtime-layer-move-session-attached"),
+            type: "provider-session.attached",
+            threadId,
+            occurredAt: now,
+            payload: {
+              id: providerThread.providerSessionId!,
+              driver,
+              providerInstanceId: modelSelection.instanceId,
+              status: "running",
+              cwd: "/tmp/move-source/worktree",
+              model: modelSelection.model,
+              capabilities: CodexProviderCapabilitiesV2,
+              createdAt: now,
+              updatedAt: now,
+              lastError: null,
+            },
+          },
+        ],
+      });
+      const busyThread = ThreadId.make("runtime-layer-move-busy");
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-move-busy-create"),
+        threadId: busyThread,
+        projectId: source,
+        title: "Busy",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+      });
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-move-busy-message"),
+        threadId: busyThread,
+        messageId: MessageId.make("runtime-layer-move-busy-message"),
+        text: "Keep working.",
+        attachments: [],
+        modelSelection,
+        dispatchMode: { type: "start_immediately" },
+      });
+      const busy = yield* orchestrator
+        .dispatch({
+          type: "thread.project.move",
+          commandId: CommandId.make("runtime-layer-move-busy-command"),
+          threadId: busyThread,
+          projectId: target,
+          expectedProjectId: source,
+        })
+        .pipe(Effect.flip);
+      assert.equal(
+        busy.cause,
+        `Thread ${busyThread} still has work in progress. Finish or stop it first.`,
+      );
+      const stale = yield* orchestrator
+        .dispatch({
+          type: "thread.project.move",
+          commandId: CommandId.make("runtime-layer-move-stale-command"),
+          threadId,
+          projectId: target,
+          expectedProjectId: target,
+        })
+        .pipe(Effect.flip);
+      assert.equal(
+        stale.cause,
+        `Thread ${threadId} changed projects before the move could be applied.`,
+      );
+      const movedResult = yield* orchestrator.dispatch({
+        type: "thread.project.move",
+        commandId: CommandId.make("runtime-layer-move-command"),
+        threadId,
+        projectId: target,
+        expectedProjectId: source,
+      });
+      const moved = yield* orchestrator.getThreadProjection(threadId);
+      assert.equal(moved.thread.projectId, target);
+      assert.isNull(moved.thread.worktreePath);
+      assert.isNull(moved.thread.branch);
+      assert.include(
+        movedResult.storedEvents.map(({ event }) => event.type),
+        "provider-session.detached",
+      );
+      assert.isTrue(
+        (yield* outbox.listByCommandId(CommandId.make("runtime-layer-move-command"))).some(
+          ({ request }) => request.type === "provider-session.detach",
+        ),
+      );
+      assert.equal(moved.messages[0]?.text, "Keep this conversation.");
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("runtime-layer-move-message"),
+        threadId,
+        messageId: MessageId.make("runtime-layer-move-message"),
+        text: "Continue.",
+        attachments: [],
+        modelSelection,
+        dispatchMode: { type: "start_immediately" },
+      });
+      const started = yield* orchestrator.getThreadProjection(threadId);
+      assert.equal(started.checkpointScopes.at(-1)?.cwd, "/tmp/move-target");
+    }).pipe(Effect.provide(EffectOutbox.layer)),
+  );
+});
+
+it.layer(layerSharedApplicationDataPlaneTest)("project filing", (it) => {
+  it.effect("moves and settles after the requesting turn completes", () =>
+    Effect.gen(function* () {
+      const projects = yield* ProjectService.ProjectService;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const eventSink = yield* EventSink.EventSinkV2;
+      const source = ProjectId.make("filing-integration-source");
+      const target = ProjectId.make("filing-integration-target");
+      const threadId = ThreadId.make("filing-integration-thread");
+      for (const [projectId, workspaceRoot] of [
+        [source, "/tmp/filing-integration-source"],
+        [target, "/tmp"],
+      ] as const) {
+        yield* projects.create({
+          commandId: CommandId.make(`${projectId}-create`),
+          projectId,
+          title: projectId,
+          workspaceRoot,
+        });
+      }
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("filing-integration-create"),
+        threadId,
+        projectId: source,
+        title: "File this",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+      });
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("filing-integration-message"),
+        threadId,
+        messageId: MessageId.make("filing-integration-message"),
+        text: "File this after the turn.",
+        attachments: [],
+        modelSelection,
+        dispatchMode: { type: "start_immediately" },
+      });
+      const projection = yield* orchestrator.getThreadProjection(threadId);
+      const run = projection.runs[0]!;
+      const providerThread = projection.providerThreads[0]!;
+      const service = yield* ThreadProjectMove.ThreadProjectMove;
+      const request = yield* service.move({
+        threadId,
+        projectId: target,
+        commandId: CommandId.make("filing-integration-move"),
+        byOwnAgent: true,
+        settleAfterMove: true,
+      });
+      assert.deepEqual(request, { movesWhenTurnEnds: true });
+      assert.equal((yield* orchestrator.getThreadProjection(threadId)).thread.projectId, source);
+      const settled = yield* eventSink
+        .stream({ threadId, afterSequence: yield* orchestrator.getThreadEventSequence(threadId) })
+        .pipe(
+          Stream.filter((stored) => stored.event.type === "thread.settled"),
+          Stream.runHead,
+          Effect.forkScoped,
+        );
+      const now = yield* DateTime.now;
+      yield* eventSink.write({
+        events: [
+          {
+            id: EventId.make("filing-integration-completed"),
+            type: "run.updated",
+            threadId,
+            runId: run.id,
+            occurredAt: now,
+            payload: { ...run, status: "completed", startedAt: now, completedAt: now },
+          },
+          {
+            id: EventId.make("filing-integration-provider-idle"),
+            type: "provider-thread.updated",
+            threadId,
+            occurredAt: now,
+            payload: { ...providerThread, status: "idle", updatedAt: now },
+          },
+        ],
+      });
+      assert.isTrue(Option.isSome(yield* Fiber.join(settled)));
+      const moved = yield* orchestrator.getThreadProjection(threadId);
+      assert.equal(moved.thread.projectId, target);
+      assert.equal(moved.thread.settledOverride, "settled");
+      assert.equal(moved.messages[0]?.text, "File this after the turn.");
+    }).pipe(
+      Effect.provide(
+        ThreadProjectMove.layer.pipe(
+          Layer.provide(
+            Layer.mock(ScheduledTaskService.ScheduledTaskService)({
+              list: () => Effect.succeed({ tasks: [] } as never),
+            }),
+          ),
+          Layer.provide(NodeServices.layer),
+        ),
+      ),
+    ),
   );
 });
 

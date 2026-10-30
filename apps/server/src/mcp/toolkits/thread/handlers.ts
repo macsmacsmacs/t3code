@@ -21,6 +21,8 @@ import {
 } from "../../threadAccess.ts";
 import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
 import * as ScheduledTasks from "../../../scheduledTasks/ScheduledTaskService.ts";
+import * as ThreadProjectMove from "../../../project/ThreadProjectMove.ts";
+import { assertNotLinked } from "../../linkOrigin.ts";
 import { queuedRunsInDeliveryOrder } from "../../../orchestration-v2/QueuedRunOrder.ts";
 import { ThreadToolkit } from "./tools.ts";
 
@@ -91,6 +93,29 @@ const writesThread = <P extends { readonly threadId?: ThreadId | undefined }, A,
 ) => McpToolAccess.writesThreads((params: P) => [params.threadId], handle);
 
 export const layer = McpToolAccess.toLayer(ThreadToolkit, {
+  t3_thread_move_project: writesThread((input) =>
+    Effect.gen(function* () {
+      yield* assertNotLinked(yield* readCaller(), "move threads into existing projects");
+      const { projection, caller } = yield* readThread(input.threadId);
+      const moves = yield* ThreadProjectMove.ThreadProjectMove;
+      return yield* moves
+        .move({
+          threadId: projection.thread.id,
+          projectId: input.projectId,
+          commandId: yield* newCommandId(),
+          byOwnAgent: caller?.id === projection.thread.id,
+          ...(input.settleAfterMove === undefined
+            ? {}
+            : { settleAfterMove: input.settleAfterMove }),
+        })
+        .pipe(
+          Effect.mapError(
+            (error) =>
+              new OrchestratorMcpFailure({ code: "orchestration_error", message: error.reason }),
+          ),
+        );
+    }),
+  ),
   run_scheduled_task_now: McpToolAccess.writesEnvironment((input) =>
     Effect.gen(function* () {
       const scheduler = yield* ScheduledTasks.ScheduledTaskService;

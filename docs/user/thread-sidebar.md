@@ -43,6 +43,12 @@ moves and the agent keeps working in the same place. Other threads in that folde
 move with it. Rename the project in its settings, and use **Initialize Git** to
 get branch and diff controls.
 
+You can also ask the agent to file a thread under an existing project. The chat
+keeps its history, and future turns work in that project's folder. Files stay
+where they are. A move requested by the thread takes effect after its current
+turn succeeds; queued work can prevent it. Threads with linked pull requests,
+related forks, or scheduled tasks need those connections resolved first.
+
 ### Start in the background
 
 In a desktop browser or the desktop app, press `Cmd+Enter` on macOS or `Ctrl+Enter`

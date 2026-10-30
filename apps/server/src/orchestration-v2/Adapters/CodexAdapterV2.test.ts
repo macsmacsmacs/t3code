@@ -2213,7 +2213,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
       ),
   );
 
-  it.effect("resumes a provider thread without requesting or decoding its history", () =>
+  it.effect("resumes a provider thread with its workspace and no history", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const scenario = "codex-resume-metadata";
@@ -2236,6 +2236,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
                 params: {
                   threadId: nativeThreadId,
                   excludeTurns: true,
+                  cwd: "/workspace/destination",
                   config: CodexAdapterV2.CODEX_THREAD_CONFIG,
                 },
               },
@@ -2251,7 +2252,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         const resumed = yield* harness.runtime.resumeThread({
           providerThread: harness.providerThread,
           modelSelection: CODEX_TEST_MODEL_SELECTION,
-          runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
+          runtimePolicy: { ...CODEX_TEST_RUNTIME_POLICY, cwd: "/workspace/destination" },
         });
 
         assert.equal(resumed.nativeThreadRef?.nativeId, nativeThreadId);

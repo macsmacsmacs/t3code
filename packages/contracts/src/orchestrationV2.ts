@@ -3356,6 +3356,13 @@ const OrchestrationV2InternalCommand = Schema.Union([
     projectId: ProjectId,
   }),
   Schema.Struct({
+    type: Schema.Literal("thread.project.move"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    projectId: ProjectId,
+    expectedProjectId: ProjectId,
+  }),
+  Schema.Struct({
     type: Schema.Literal("thread.pull-request-watch.sync"),
     commandId: CommandId,
     threadId: ThreadId,
