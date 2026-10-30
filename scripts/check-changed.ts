@@ -156,7 +156,7 @@ export const comparisonBase = Effect.fn("checkChanged.comparisonBase")(function*
   for (const { ref, rev } of candidates) {
     const base = yield* git(root, ["merge-base", "HEAD", rev]).pipe(
       Effect.map((stdout) => stdout.toString().trim()),
-      Effect.catch(() => Effect.succeed(undefined)),
+      Effect.orElseSucceed(() => undefined),
     );
     if (!base) continue;
     const ahead = Number((yield* git(root, ["rev-list", "--count", base + "..HEAD"])).toString());
