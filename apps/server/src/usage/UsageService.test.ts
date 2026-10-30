@@ -1990,6 +1990,24 @@ describe("UsageService", () => {
         const original = yield* service.readSummary(WINDOW);
         assert.strictEqual(original.buckets[0]?.costUsd, 0);
         assert.strictEqual(original.buckets[0]?.unpricedRecords, 1);
+        const threadTokens = {
+          items: [
+            {
+              model: "example-model",
+              totals: {
+                uncachedInputTokens: 1000,
+                cachedInputTokens: 0,
+                cacheCreationTokens: 0,
+                outputTokens: 1000,
+                reasoningTokens: 0,
+              },
+            },
+          ],
+        };
+        assert.deepStrictEqual(yield* service.priceTokens(threadTokens), {
+          costUsd: 0,
+          unpricedModels: ["example-model"],
+        });
 
         yield* settingsService.updateSettings({
           usagePriceOverrides: {
@@ -2001,6 +2019,9 @@ describe("UsageService", () => {
         assert.strictEqual(overridden.buckets[0]?.costSource, "modelPriced");
         assert.strictEqual(overridden.buckets[0]?.unpricedRecords, 0);
         assert.deepStrictEqual(overridden.buckets[0]?.totals, original.buckets[0]?.totals);
+        const pricedThread = yield* service.priceTokens(threadTokens);
+        assert.closeTo(pricedThread.costUsd, 0.01, 1e-12);
+        assert.deepStrictEqual(pricedThread.unpricedModels, []);
 
         yield* settingsService.updateSettings({
           usagePriceOverrides: {

@@ -120,6 +120,19 @@ export const UsageSummaryInput = Schema.Struct({
 });
 export type UsageSummaryInput = typeof UsageSummaryInput.Type;
 
+export const UsagePriceTokensInput = Schema.Struct({
+  items: Schema.Array(
+    Schema.Struct({ model: TrimmedNonEmptyString, totals: UsageTokenTotals }),
+  ).check(Schema.isMaxLength(64)),
+});
+export type UsagePriceTokensInput = typeof UsagePriceTokensInput.Type;
+
+export const UsagePriceTokensResult = Schema.Struct({
+  costUsd: Schema.Number,
+  unpricedModels: Schema.Array(TrimmedNonEmptyString),
+});
+export type UsagePriceTokensResult = typeof UsagePriceTokensResult.Type;
+
 export const UsageSummary = Schema.Struct({
   contractVersion: Schema.Number,
   readAt: Schema.String,

@@ -7,6 +7,8 @@ import {
   type UsageSource,
   type UsagePricing,
   type UsageSummary,
+  type UsagePriceTokensInput,
+  type UsagePriceTokensResult,
   type UsageSummaryInput,
   UsageReadError,
 } from "@t3tools/contracts";
@@ -39,7 +41,12 @@ import type {
   UsageRecord,
 } from "@t3tools/provider-core/server/usage";
 import { resolveModelAliases, UsageAggregator } from "./usageAggregation.ts";
-import { createOverrideRateTable, parseRateTable, type RateTable } from "./usagePricing.ts";
+import {
+  createOverrideRateTable,
+  parseRateTable,
+  priceUsage,
+  type RateTable,
+} from "./usagePricing.ts";
 import {
   listTranscriptFiles,
   readDirectoryVolumeId,
@@ -143,6 +150,7 @@ export class UsageService extends Context.Service<
   {
     readonly readSummary: (input: UsageSummaryInput) => Effect.Effect<UsageSummary, UsageReadError>;
     readonly refreshRates: Effect.Effect<UsagePricing>;
+    readonly priceTokens: (input: UsagePriceTokensInput) => Effect.Effect<UsagePriceTokensResult>;
   }
 >()("t3/usage/UsageService") {}
 
@@ -929,7 +937,38 @@ export const make = Effect.gen(function* () {
     return yield* Deferred.await(deferred);
   });
 
-  return { readSummary, refreshRates, awaitPersisted } as const;
+  // Standard-speed list prices, with the same overrides and aliases as the Usage page.
+  const priceTokens = Effect.fn("UsageService.priceTokens")(function* (
+    input: UsagePriceTokensInput,
+  ) {
+    yield* ensureRates(false);
+    const settings = yield* settingsService.getSettings.pipe(Effect.option);
+    const overrides = Option.isSome(settings)
+      ? createOverrideRateTable(settings.value.usagePriceOverrides)
+      : undefined;
+    const aliases = Option.isSome(settings)
+      ? resolveModelAliases(settings.value.usageModelAliases)
+      : undefined;
+    let costUsd = 0;
+    const unpricedModels = new Set<string>();
+    for (const item of input.items) {
+      const priced = priceUsage(
+        rates,
+        {
+          model: aliases?.get(item.model) ?? item.model,
+          totals: item.totals,
+          speed: "standard",
+          reportedCostUsd: null,
+        },
+        overrides,
+      );
+      if (priced.costSource === "unpriced") unpricedModels.add(item.model);
+      costUsd += priced.costUsd;
+    }
+    return { costUsd, unpricedModels: [...unpricedModels] };
+  });
+
+  return { readSummary, refreshRates, priceTokens, awaitPersisted } as const;
 });
 
 export const layer = Layer.effect(UsageService, make);

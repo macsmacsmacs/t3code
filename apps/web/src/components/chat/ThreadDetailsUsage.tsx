@@ -1,4 +1,6 @@
+import { useAtomValue } from "@effect/atom-react";
 import type {
+  EnvironmentId,
   ProviderInstanceId,
   ServerProvider,
   ServerProviderUsageWindow,
@@ -12,12 +14,16 @@ import {
   paceOf,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
+import { formatUsd } from "@t3tools/shared/usageFormat";
+import { AsyncResult } from "effect/reactivity";
 import type { ReactNode } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { type ContextWindowSnapshot, formatContextWindowTokens } from "../../lib/contextWindow";
+import type { ThreadTokenTotals } from "../../lib/threadCost";
 import { cn } from "../../lib/utils";
+import { serverEnvironment } from "../../state/server";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
@@ -33,6 +39,8 @@ export interface ThreadDetailsUsageInput {
   readonly providers: readonly ServerProvider[];
   readonly sources: UsageLimitSourceSnapshots;
   readonly contextWindow: ContextWindowSnapshot | null;
+  readonly environmentId: EnvironmentId | null;
+  readonly tokens: ThreadTokenTotals | null;
 }
 
 /**
@@ -44,6 +52,8 @@ export function ThreadDetailsUsage({
   providers,
   sources,
   contextWindow,
+  environmentId,
+  tokens,
 }: ThreadDetailsUsageInput) {
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
@@ -57,7 +67,8 @@ export function ThreadDetailsUsage({
     report?.accounts.find((entry) => entry.instanceId === providerInstanceId)?.limits ??
     providers.find((provider) => provider.instanceId === providerInstanceId)?.usageLimits;
   const notice = limits ? limitsNotice(limits) : null;
-  if (!limits && !contextWindow) return null;
+  const showCost = environmentId !== null && tokens !== null;
+  if (!limits && !contextWindow && !showCost) return null;
 
   return (
     <ThreadDetailsSection
@@ -78,6 +89,13 @@ export function ThreadDetailsUsage({
           ? limits.windows.map((window) => <LimitRow key={window.id} window={window} now={now} />)
           : null}
         {contextWindow ? <ContextRow usage={contextWindow} spaced={limits !== undefined} /> : null}
+        {showCost ? (
+          <CostRow
+            environmentId={environmentId}
+            tokens={tokens}
+            spaced={limits !== undefined && !contextWindow}
+          />
+        ) : null}
       </div>
     </ThreadDetailsSection>
   );
@@ -146,6 +164,53 @@ function ContextRow({
         </>
       }
       value={left === null ? used : undefined}
+    />
+  );
+}
+
+function CostRow({
+  environmentId,
+  tokens,
+  spaced,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly tokens: ThreadTokenTotals;
+  readonly spaced: boolean;
+}) {
+  const result = useAtomValue(
+    serverEnvironment.priceUsageTokens({ environmentId, input: { items: tokens.items } }),
+  );
+  const priced = AsyncResult.getOrElse(result, () => null);
+  const value =
+    priced === null
+      ? "…"
+      : priced.unpricedModels.length === tokens.items.length
+        ? "Unpriced"
+        : priced.costUsd > 0 && priced.costUsd < 0.01
+          ? "<$0.01"
+          : formatUsd(priced.costUsd);
+  return (
+    <UsageRow
+      label="Cost"
+      left={null}
+      className={cn(spaced && "mt-2")}
+      tooltip={
+        <>
+          <span className="text-foreground">Estimated at API list prices</span>
+          {tokens.hasSubagents ? (
+            <span className="text-muted-foreground">Subagent work is not included</span>
+          ) : null}
+          {tokens.incomplete ? (
+            <span className="text-muted-foreground">Some turns did not report tokens</span>
+          ) : null}
+          {priced && priced.unpricedModels.length > 0 ? (
+            <span className="text-muted-foreground">
+              No price for {priced.unpricedModels.join(", ")}
+            </span>
+          ) : null}
+        </>
+      }
+      value={value}
     />
   );
 }

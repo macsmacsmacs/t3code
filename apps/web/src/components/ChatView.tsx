@@ -319,6 +319,7 @@ import {
   deriveLatestContextWindowSnapshot,
   latestProviderTurnTokenUsage,
 } from "../lib/contextWindow";
+import { threadTokenTotalsByModel } from "../lib/threadCost";
 import {
   MOBILE_COMPOSER_VIEW_TRANSITION_NAME,
   MOBILE_DRAFT_HEADLINE_VIEW_TRANSITION_NAME,
@@ -521,6 +522,8 @@ export default function ChatView(props: ChatViewProps) {
   const activeProviderThread = serverProjection?.providerThreads.find(
     (thread) => thread.id === serverProjection.thread.activeProviderThreadId,
   );
+  const activeThreadTokenTotals =
+    serverProjection === null ? null : threadTokenTotalsByModel(serverProjection);
   const activeThreadLiveTokenUsage = latestProviderTurnTokenUsage(
     serverProjection?.providerTurns ?? [],
     serverProjection,
@@ -3793,6 +3796,8 @@ export default function ChatView(props: ChatViewProps) {
                 providers: providerStatuses,
                 sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
                 contextWindow: activeContextWindow,
+                environmentId: isServerThread ? environmentId : null,
+                tokens: activeThreadTokenTotals,
               }}
             />
 
