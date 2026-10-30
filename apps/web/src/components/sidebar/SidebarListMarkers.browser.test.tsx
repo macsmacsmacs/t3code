@@ -70,4 +70,24 @@ describe("SidebarSectionPlaceholder", () => {
     expect(scroller.scrollTop, "drag start scrolled the list to the settled drop hint").toBe(0);
     document.dispatchEvent(pointer("pointerup", row, -6));
   });
+
+  it("reveals a settled drop hint the viewport clips at its bottom edge", async () => {
+    await using screen = await render(<SortableList />);
+    const scroller = screen.getByTestId("scroller").element();
+    const placeholder = screen.getByTestId("sidebar-settled-placeholder").element();
+    const box = placeholder.firstElementChild!;
+    const clipped = box.getBoundingClientRect();
+    scroller.scrollTop +=
+      clipped.top + clipped.height / 2 - scroller.getBoundingClientRect().bottom;
+    const row = screen.getByTestId("thread-38").element();
+
+    row.dispatchEvent(pointer("pointerdown", row, 0));
+    document.dispatchEvent(pointer("pointermove", row, -6));
+    await vi.waitFor(() => expect(placeholder.getAttribute("style")).toContain("translate"));
+
+    expect(box.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      scroller.getBoundingClientRect().bottom,
+    );
+    document.dispatchEvent(pointer("pointerup", row, -6));
+  });
 });
