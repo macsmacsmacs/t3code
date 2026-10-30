@@ -1698,7 +1698,7 @@ it.effect("a stalled desktop viewer still gets its size, control and reconnect",
       yield* viewer.input({ type: "takeControl" });
       context.page.emit("filechooser", {
         isMultiple: () => false,
-        element: () => ({ getAttribute: async () => ".csv" }),
+        element: () => fileChooserElement(".csv"),
         setFiles: vi.fn(async () => {}),
       });
       let chooser = yield* Queue.take(viewer.output);
@@ -1996,7 +1996,7 @@ it.live.each([
       const setViewportSize = popup.page.setViewportSize;
       popup.page.setViewportSize = vi.fn(async (size) => {
         await setViewportSize(size);
-        if (size.width === 900) resized.resolve();
+        if (size?.width === 900) resized.resolve();
       });
       const newCDPSession = popup.newCDPSession;
       popup.newCDPSession = async (target) => {

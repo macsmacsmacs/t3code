@@ -26,32 +26,49 @@ it.effect.each(["merge", "disable-auto-merge"] as const)(
                 // selected repository must still own every request and mutation.
                 const host = input.env?.GITLAB_HOST ?? otherHost;
                 const path = input.args[1];
-                const mutation = input.args[0] === "mr" || input.args.includes("POST");
+                const mutation =
+                  input.args[0] === "mr" || (input.args.includes("POST") && path !== "graphql");
                 if (mutation) mergedHosts.push(host);
                 else readHosts.push(host);
                 const response = mutation
                   ? {}
-                  : path?.includes("merge_requests/")
+                  : path === "graphql"
                     ? {
-                        iid: 7,
-                        title: "Merge request 7",
-                        web_url: `https://${host}/acme/web/-/merge_requests/7`,
-                        source_branch: "feature",
-                        target_branch: "main",
-                        created_at: "2026-07-01T00:00:00Z",
-                        updated_at: "2026-07-02T00:00:00Z",
-                        user: { can_merge: true },
-                        diff_refs: {
-                          head_sha: "a".repeat(40),
-                          base_sha: "b".repeat(40),
-                          start_sha: "b".repeat(40),
+                        data: {
+                          project: {
+                            mergeRequests: {
+                              nodes: [
+                                { iid: "7", diffStatsSummary: { additions: 2, deletions: 1 } },
+                              ],
+                            },
+                            mergeRequest: {
+                              diffStatsSummary: { fileCount: 1 },
+                              diffStats: [{ path: "src/a.ts", additions: 2, deletions: 1 }],
+                            },
+                          },
                         },
                       }
-                    : path === "user"
-                      ? { username: "reviewer" }
-                      : path?.includes("/labels?") || path?.includes("/users?")
-                        ? []
-                        : { merge_method: "merge", squash_option: "default_off" };
+                    : path?.includes("merge_requests/")
+                      ? {
+                          iid: 7,
+                          title: "Merge request 7",
+                          web_url: `https://${host}/acme/web/-/merge_requests/7`,
+                          source_branch: "feature",
+                          target_branch: "main",
+                          created_at: "2026-07-01T00:00:00Z",
+                          updated_at: "2026-07-02T00:00:00Z",
+                          user: { can_merge: true },
+                          diff_refs: {
+                            head_sha: "a".repeat(40),
+                            base_sha: "b".repeat(40),
+                            start_sha: "b".repeat(40),
+                          },
+                        }
+                      : path === "user"
+                        ? { username: "reviewer" }
+                        : path?.includes("/labels?") || path?.includes("/users?")
+                          ? []
+                          : { merge_method: "merge", squash_option: "default_off" };
                 return Effect.succeed(
                   TestSourceControlHost.processOutput(JSON.stringify(response)),
                 );
@@ -73,6 +90,21 @@ it.effect.each(["merge", "disable-auto-merge"] as const)(
         number: 7,
       };
       const detail = yield* provider.getChangeRequest(reference);
+      expect({ additions: detail.additions, deletions: detail.deletions }).toEqual({
+        additions: 2,
+        deletions: 1,
+      });
+      assert.isDefined(provider.getChangeRequestSummary);
+      expect((yield* provider.getChangeRequestSummary(reference)).additions).toBe(2);
+      assert.isDefined(provider.listChangeRequestStats);
+      expect(
+        yield* provider.listChangeRequestStats({ ...reference, changeRequests: [reference] }),
+      ).toEqual([{ repository: reference.repository, number: 7, additions: 2, deletions: 1 }]);
+      assert.isDefined(provider.getFileStats);
+      expect(yield* provider.getFileStats(reference)).toEqual({
+        files: [{ path: "src/a.ts", additions: 2, deletions: 1 }],
+        truncated: false,
+      });
       expect(yield* provider.getViewer(reference)).toBe("reviewer");
       assert.isDefined(provider.listRepositoryLabels);
       yield* provider.listRepositoryLabels(reference);
@@ -80,7 +112,7 @@ it.effect.each(["merge", "disable-auto-merge"] as const)(
       yield* provider.searchRepositoryAuthors(reference);
       yield* provider.runAction({ ...reference, action });
 
-      expect(readHosts).toEqual(Array(action === "merge" ? 6 : 5).fill(selectedHost));
+      expect(readHosts).toEqual(Array(action === "merge" ? 11 : 10).fill(selectedHost));
       expect({ url: detail.url, mutatedHosts: mergedHosts }).toEqual({
         url: `https://${selectedHost}/acme/web/-/merge_requests/7`,
         mutatedHosts: [selectedHost],

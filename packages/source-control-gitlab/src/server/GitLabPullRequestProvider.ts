@@ -190,9 +190,15 @@ export const make = Effect.gen(function* () {
     },
     detail = cli.getMergeRequestDetail(input),
   ) =>
-    Effect.all([detail, cli.listMergeRequestStats({ cwd: input.cwd, changeRequests: [input] })], {
-      concurrency: 2,
-    }).pipe(
+    Effect.all(
+      [
+        detail,
+        cli.listMergeRequestStats({ cwd: input.cwd, host: input.host, changeRequests: [input] }),
+      ],
+      {
+        concurrency: 2,
+      },
+    ).pipe(
       Effect.map(([mergeRequest, [stat]]) =>
         stat === undefined
           ? mergeRequest
@@ -230,9 +236,7 @@ export const make = Effect.gen(function* () {
       cli.getMergeRequestFileStats(input).pipe(Effect.mapError(fail("getFileStats"))),
 
     listChangeRequestStats: (input) =>
-      cli
-        .listMergeRequestStats({ cwd: input.cwd, changeRequests: input.changeRequests })
-        .pipe(Effect.mapError(fail("listChangeRequestStats"))),
+      cli.listMergeRequestStats(input).pipe(Effect.mapError(fail("listChangeRequestStats"))),
 
     getChangeRequestChecks: (input) =>
       mergeRequestDetail(input).pipe(

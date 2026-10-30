@@ -250,6 +250,7 @@ export class GitLabPullRequestCli extends Context.Service<
     /** Line counts for the given merge requests; one with no answer is left out. */
     readonly listMergeRequestStats: (input: {
       readonly cwd: string;
+      readonly host?: string | undefined;
       readonly changeRequests: ReadonlyArray<{
         readonly repository: string;
         readonly number: number;
@@ -266,6 +267,7 @@ export class GitLabPullRequestCli extends Context.Service<
 
     readonly getMergeRequestFileStats: (input: {
       readonly cwd: string;
+      readonly host?: string | undefined;
       readonly repository: string;
       readonly number: number;
     }) => Effect.Effect<ProviderFileStats, GitLabPullRequestCliError>;
@@ -1100,6 +1102,7 @@ export const make = Effect.gen(function* () {
 
   const graphqlRead = <A>(input: {
     readonly cwd: string;
+    readonly host?: string | undefined;
     readonly operation: string;
     readonly query: string;
     readonly variables: Record<string, unknown>;
@@ -1107,6 +1110,7 @@ export const make = Effect.gen(function* () {
   }) =>
     api({
       cwd: input.cwd,
+      host: input.host,
       path: "graphql",
       method: "POST",
       stdin: JSON.stringify({ query: input.query, variables: input.variables }),
@@ -1128,11 +1132,13 @@ export const make = Effect.gen(function* () {
 
   const mergeRequestStats = (input: {
     readonly cwd: string;
+    readonly host?: string | undefined;
     readonly repository: string;
     readonly numbers: ReadonlyArray<number>;
   }) =>
     graphqlRead({
       cwd: input.cwd,
+      host: input.host,
       operation: "listMergeRequestStats",
       query: MERGE_REQUEST_STATS_GRAPHQL_QUERY,
       variables: { fullPath: input.repository, iids: input.numbers.map(String) },
@@ -1161,7 +1167,7 @@ export const make = Effect.gen(function* () {
     return Effect.forEach(
       reads,
       (read) =>
-        mergeRequestStats({ cwd: input.cwd, ...read }).pipe(
+        mergeRequestStats({ cwd: input.cwd, host: input.host, ...read }).pipe(
           Effect.map((stats) =>
             read.numbers.flatMap((number) => {
               const stat = stats.get(number);
@@ -1298,6 +1304,7 @@ export const make = Effect.gen(function* () {
     getMergeRequestFileStats: Effect.fn("GitLabPullRequestCli.getMergeRequestFileStats")((input) =>
       graphqlRead({
         cwd: input.cwd,
+        host: input.host,
         operation: "getMergeRequestFileStats",
         query: MERGE_REQUEST_FILE_STATS_GRAPHQL_QUERY,
         variables: { fullPath: input.repository, iid: String(input.number) },
