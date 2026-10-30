@@ -46,7 +46,7 @@ export function PullRequestActivityFilters({
             { id: "bots", title: "Bot comments", state: value.bots ? "on" : "off" },
             {
               id: "resolved",
-              title: "Resolved or dismissed",
+              title: "Resolved, dismissed or hidden",
               state: value.resolved ? "on" : "off",
             },
           ]}
