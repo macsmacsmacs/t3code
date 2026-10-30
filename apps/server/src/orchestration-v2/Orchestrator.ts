@@ -4244,7 +4244,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const target = yield* projects.get(command.projectId).pipe(mapDispatchError(command));
       if (Option.isNone(target) || target.value.deletedAt !== null)
         return yield* reject(`cannot move to missing project ${command.projectId}.`);
-      if (thread.projectId === command.projectId) return;
+      if (thread.projectId === command.projectId)
+        return yield* reject("is already in that project.");
       for (const session of projection.providerSessions) {
         if (session.status === "stopped" || session.status === "error") continue;
         yield* dispatchProviderSessionDetach(
@@ -4260,23 +4261,38 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         );
       }
       const now = yield* DateTime.now;
-      yield* emit(
-        events,
-        command,
-      )({
-        type: "thread.metadata-updated",
-        threadId: command.threadId,
-        providerInstanceId: thread.providerInstanceId,
-        occurredAt: now,
-        payload: {
-          ...thread,
-          projectId: command.projectId,
-          worktreePath: null,
-          branch: null,
-          branchPullRequest: null,
-          updatedAt: now,
-        },
-      });
+      // Subagent children follow their parent so the family stays in one project.
+      const members = [
+        thread,
+        ...(yield* Effect.forEach(
+          [...family.threads, ...family.archivedThreads].filter(
+            (member) => member.id !== thread.id,
+          ),
+          (member) =>
+            projectionStore
+              .getThreadRecords(member.id, [], { turnItemTypes: [] })
+              .pipe(Effect.map((records) => records.thread)),
+        ).pipe(mapDispatchError(command))),
+      ];
+      for (const member of members) {
+        yield* emit(
+          events,
+          command,
+        )({
+          type: "thread.metadata-updated",
+          threadId: member.id,
+          providerInstanceId: member.providerInstanceId,
+          occurredAt: now,
+          payload: {
+            ...member,
+            projectId: command.projectId,
+            worktreePath: null,
+            branch: null,
+            branchPullRequest: null,
+            updatedAt: now,
+          },
+        });
+      }
     },
   );
 

@@ -132,34 +132,52 @@ const make = Effect.gen(function* () {
         });
       yield* ensureDestination(input.projectId, thread.providerInstanceId);
       yield* ensureNoBoundTasks(input.threadId);
+      const alreadyFiled = thread.projectId === input.projectId;
+      if (alreadyFiled && !input.settleAfterMove)
+        return yield* new ThreadProjectMoveError({
+          reason: "This thread is already in that project.",
+        });
       const apply = Effect.gen(function* () {
         yield* ensureDestination(input.projectId, thread.providerInstanceId);
         yield* ensureNoBoundTasks(input.threadId);
-        const result = yield* threads
-          .dispatch({
-            type: "thread.project.move",
-            commandId: input.commandId,
-            threadId: input.threadId,
-            projectId: input.projectId,
-            expectedProjectId: thread.projectId,
-          })
-          .pipe(
-            Effect.mapError((cause) =>
-              cause._tag === "OrchestratorDispatchError" && typeof cause.cause === "string"
-                ? new ThreadProjectMoveError({ reason: cause.cause, cause })
-                : failure("Could not move the thread.")(cause),
-            ),
-          );
-        if (input.settleAfterMove) {
-          yield* threads
-            .settleThread({
-              threadId: input.threadId,
-              commandId: CommandId.make(`${input.commandId}:settle`),
-              byOwnAgent: false,
-            })
-            .pipe(Effect.mapError(failure("The thread moved but could not be settled.")));
-        }
-        return result;
+        // A retry after "moved but could not be settled" lands here and only settles.
+        const moved = alreadyFiled
+          ? null
+          : yield* threads
+              .dispatch({
+                type: "thread.project.move",
+                commandId: input.commandId,
+                threadId: input.threadId,
+                projectId: input.projectId,
+                expectedProjectId: thread.projectId,
+              })
+              .pipe(
+                Effect.mapError((cause) =>
+                  cause._tag === "OrchestratorDispatchError" && typeof cause.cause === "string"
+                    ? new ThreadProjectMoveError({ reason: cause.cause, cause })
+                    : failure("Could not move the thread.")(cause),
+                ),
+              );
+        const settled = input.settleAfterMove
+          ? yield* threads
+              .settleThread({
+                threadId: input.threadId,
+                commandId: CommandId.make(`${input.commandId}:settle`),
+                byOwnAgent: false,
+              })
+              .pipe(
+                Effect.mapError(
+                  failure(
+                    moved === null
+                      ? "Could not settle the thread."
+                      : "The thread moved but could not be settled.",
+                  ),
+                ),
+              )
+          : null;
+        if (moved !== null) return { sequence: moved.sequence };
+        if (settled !== null && "sequence" in settled) return { sequence: settled.sequence };
+        return yield* new ThreadProjectMoveError({ reason: "Could not settle the thread." });
       });
       if (input.byOwnAgent && thread.activeRunId !== null) {
         yield* threads
@@ -170,14 +188,20 @@ const make = Effect.gen(function* () {
             timeoutMs: 24 * 60 * 60 * 1_000,
           })
           .pipe(
-            Effect.flatMap(({ run }) => (run?.status === "completed" ? apply : Effect.void)),
+            Effect.flatMap(({ run }) =>
+              run?.status === "completed"
+                ? apply
+                : Effect.logWarning("Deferred thread move skipped: the turn did not complete.", {
+                    threadId: thread.id,
+                    runStatus: run?.status ?? null,
+                  }),
+            ),
             Effect.ignoreCause({ log: true }),
             Effect.forkIn(scope),
           );
         return { movesWhenTurnEnds: true } as const;
       }
-      const result = yield* apply;
-      return { sequence: result.sequence };
+      return yield* apply;
     },
   );
   return ThreadProjectMove.of({ move });

@@ -129,3 +129,62 @@ it.effect("refuses to strand a thread's scheduled tasks", () =>
     expect(result.reason).toContain("scheduled tasks");
   }),
 );
+
+it.effect("settles a thread already filed in the target project without moving it", () =>
+  Effect.gen(function* () {
+    const threadId = ThreadId.make("thread:already-filed");
+    const projectId = ProjectId.make("project:target");
+    const settled = yield* Deferred.make<CommandId>();
+    const layerTest = ThreadProjectMove.layer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(ThreadManagement.ThreadManagementService)({
+            getThreadShell: () =>
+              Effect.succeed({
+                id: threadId,
+                projectId,
+                activeRunId: null,
+                providerInstanceId: ProviderInstanceId.make("codex"),
+                deletedAt: null,
+                lineage: { relationshipToParent: null },
+              } as never),
+            isProviderInstanceEnabledForProject: () => Effect.succeed(true),
+            readShellSnapshot: () =>
+              Effect.succeed(Effect.succeed({ threads: [], archivedThreads: [] } as never)),
+            getThreadRecords: () => Effect.succeed({ subagents: [] } as never),
+            dispatch: () => Effect.die("a same-project move must not dispatch"),
+            settleThread: (input) =>
+              Deferred.succeed(settled, input.commandId).pipe(Effect.as({ sequence: 7 })),
+          }),
+          Layer.mock(ProjectService.ProjectService)({
+            getById: () =>
+              Effect.succeedSome({
+                id: projectId,
+                deletedAt: null,
+                workspaceRoot: "/tmp",
+              } as never),
+          }),
+          Layer.mock(ScheduledTasks.ScheduledTaskService)({
+            list: () => Effect.succeed({ tasks: [] } as never),
+          }),
+        ),
+      ),
+      Layer.provide(NodeServices.layer),
+    );
+    yield* Effect.gen(function* () {
+      const service = yield* ThreadProjectMove.ThreadProjectMove;
+      const base = { threadId, projectId, byOwnAgent: false } as const;
+      const refused = yield* service
+        .move({ ...base, commandId: CommandId.make("command:already-filed") })
+        .pipe(Effect.flip);
+      expect(refused.reason).toBe("This thread is already in that project.");
+      const result = yield* service.move({
+        ...base,
+        commandId: CommandId.make("command:already-filed-settle"),
+        settleAfterMove: true,
+      });
+      expect(result).toEqual({ sequence: 7 });
+      expect(yield* Deferred.await(settled)).toBe("command:already-filed-settle:settle");
+    }).pipe(Effect.provide(layerTest));
+  }),
+);

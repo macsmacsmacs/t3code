@@ -2,6 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import { ProviderInstanceId } from "@t3tools/contracts";
 import { McpProviderSessions } from "@t3tools/provider-core/server/McpProviderSessions";
+import { resolveT3McpToolPresentation } from "@t3tools/shared/t3McpToolPresentation";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { McpServer } from "effect/ai";
@@ -105,6 +106,11 @@ const codexAdditionalContext = () =>
     .map((entry) => entry.value)
     .join("");
 
+const layerMcpTools = McpHttpServer.layerTools.pipe(
+  Layer.provideMerge(McpServer.McpServer.layer),
+  Layer.provide(toolHandlerServices),
+);
+
 // CI rejects a PR that raises any value above main's agentContextBudget.json, so growth
 // needs the agent-context-increase label. Lower the values when the text shrinks.
 it.effect("agent context matches the committed budget", () =>
@@ -129,12 +135,14 @@ it.effect("agent context matches the committed budget", () =>
       measured,
       "Set agentContextBudget.json to the measured values. Before you cut text to fit, run the evals that cover it (evals/README.md).",
     ).toEqual(budget);
-  }).pipe(
-    Effect.provide(
-      McpHttpServer.layerTools.pipe(
-        Layer.provideMerge(McpServer.McpServer.layer),
-        Layer.provide(toolHandlerServices),
-      ),
-    ),
-  ),
+  }).pipe(Effect.provide(layerMcpTools)),
+);
+
+it.effect("every registered tool has a client presentation", () =>
+  Effect.gen(function* () {
+    const mcp = yield* McpServer.McpServer;
+    for (const { tool } of mcp.tools) {
+      expect(resolveT3McpToolPresentation(tool.name), tool.name).not.toBeNull();
+    }
+  }).pipe(Effect.provide(layerMcpTools)),
 );

@@ -6737,6 +6737,37 @@ it.layer(layerSharedApplicationDataPlaneTest)("snooze projection", (it) => {
         stale.cause,
         `Thread ${threadId} changed projects before the move could be applied.`,
       );
+      const alreadyFiled = yield* orchestrator
+        .dispatch({
+          type: "thread.project.move",
+          commandId: CommandId.make("runtime-layer-move-same-command"),
+          threadId,
+          projectId: source,
+          expectedProjectId: source,
+        })
+        .pipe(Effect.flip);
+      assert.equal(alreadyFiled.cause, `Thread ${threadId} is already in that project.`);
+      const subagentThread = ThreadId.make("runtime-layer-move-subagent");
+      yield* eventSink.write({
+        events: [
+          {
+            id: EventId.make("runtime-layer-move-subagent-created"),
+            type: "thread.created",
+            threadId: subagentThread,
+            occurredAt: now,
+            payload: {
+              ...previous.thread,
+              id: subagentThread,
+              creationSource: "provider",
+              lineage: {
+                parentThreadId: threadId,
+                rootThreadId: threadId,
+                relationshipToParent: "subagent",
+              },
+            },
+          },
+        ],
+      });
       const movedResult = yield* orchestrator.dispatch({
         type: "thread.project.move",
         commandId: CommandId.make("runtime-layer-move-command"),
@@ -6748,6 +6779,7 @@ it.layer(layerSharedApplicationDataPlaneTest)("snooze projection", (it) => {
       assert.equal(moved.thread.projectId, target);
       assert.isNull(moved.thread.worktreePath);
       assert.isNull(moved.thread.branch);
+      assert.equal((yield* orchestrator.getThreadShell(subagentThread))?.projectId, target);
       assert.include(
         movedResult.storedEvents.map(({ event }) => event.type),
         "provider-session.detached",
