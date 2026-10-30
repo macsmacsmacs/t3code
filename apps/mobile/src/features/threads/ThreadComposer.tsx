@@ -32,7 +32,7 @@ import {
 import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { ReactNode } from "react";
 import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
-import { Keyboard, Platform, View, type ViewStyle } from "react-native";
+import { Keyboard, PixelRatio, Platform, View, type ViewStyle } from "react-native";
 import { composerImageGallery } from "../../lib/composerImageGallery";
 import { filePreviewGallery } from "../../lib/filePreviewGallery";
 import { FilePreviewModal, type FilePreviewSource } from "../../components/FilePreviewModal";
@@ -152,10 +152,11 @@ function useCompactComposerEditor(text: ScaledTextRole, value: string) {
   );
   // A line that fits the expanded editor may still overflow its compact slot.
   // Compare its measured width too so widening cannot trigger a collapse loop.
+  // Two pixels absorb Android's floored width and the compact slot's edge snapping.
   const isExpanded =
     value.length > 0 &&
     (contentHeight > text.lineHeight * 1.5 ||
-      (compactWidth > 0 && contentSize.width > compactWidth));
+      (compactWidth > 0 && contentSize.width > compactWidth - 2 / PixelRatio.get()));
   const compactRowHeight = Math.max(44, minimum);
   const editorStyle = useAnimatedStyle(() => ({
     position: "absolute",
