@@ -774,15 +774,18 @@ describe("AcpAdapterV2", () => {
           driver: ACP_TEST_DRIVER,
           capabilities: AcpProviderCapabilitiesV2,
           reportsPerTurnPromptUsage: true,
+          terminateRuntimeProcessGroupOnInterrupt: true,
           makeRuntime: makeMockRuntime({
             childProcessSpawner: yield* ChildProcessSpawner.ChildProcessSpawner,
             mockAgentPath: yield* path.fromFileUrl(
               new URL("../../../scripts/acp-mock-agent.ts", import.meta.url),
             ),
+            ownDetachedProcessGroup: true,
+            processGroupTerminationGrace: 0,
             wrapRuntime: (runtime) => ({
               ...runtime,
               // The response only leaves the agent after the turn has been
-              // Stopped and finalized: cancel does not interrupt this fiber.
+              // force stopped and finalized: teardown does not interrupt this fiber.
               prompt: () =>
                 Deferred.succeed(dispatched, undefined).pipe(
                   Effect.andThen(Deferred.await(gate)),
@@ -794,7 +797,6 @@ describe("AcpAdapterV2", () => {
                   ),
                 ),
             }),
-            wrapCancel: () => Effect.void,
           }),
         },
       });
@@ -845,9 +847,12 @@ describe("AcpAdapterV2", () => {
         driver: ACP_TEST_DRIVER,
         nativeTurnId: acpScopedNativeId(instanceId, "mock-session-1:turn:1"),
       });
-      // The gated prompt never acknowledges the cancel, so the interrupt times
-      // out — and that timeout path is what finalizes the turn as interrupted.
-      yield* runtime.interruptTurn({ providerThread, providerTurnId }).pipe(Effect.option);
+      // Force stop finalizes the turn without waiting for the gated prompt response.
+      yield* runtime.interruptTurn({
+        providerThread,
+        providerTurnId,
+        requestRuntimeRestart: true,
+      });
       yield* Deferred.await(usageRecorded);
       const usageAt = () => {
         const turns = events.filter(
