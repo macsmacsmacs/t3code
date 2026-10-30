@@ -12,6 +12,7 @@ vi.mock(import("@effect/atom-react"), async (original) => ({
 }));
 
 vi.mock(import("../../state/entities"), () => ({
+  useQuietThreadShell: (() => null) as never,
   useThreadProjection: ((ref: unknown) =>
     ref === null ? null : { projection: state.projection }) as never,
   useThreadRelationshipShells: (() =>
@@ -19,6 +20,7 @@ vi.mock(import("../../state/entities"), () => ({
   useProjects: (() => []) as never,
 }));
 vi.mock(import("../../state/environments"), () => ({
+  useEnvironment: (() => null) as never,
   useEnvironmentProviders: (() => new Map()) as never,
 }));
 vi.mock(import("../../lib/archivedThreadsState"), () => ({
