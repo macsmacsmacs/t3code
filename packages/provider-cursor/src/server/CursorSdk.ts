@@ -33,9 +33,9 @@ function isCursorShellSpawnFailure(reason: unknown): boolean {
 
 /**
  * The SDK writes final frames from promises nothing awaits. A closed stream rejects them
- * with WriteIterableClosedError; an ended request body with the Aborted ConnectError its
- * pump made from ERR_STREAM_WRITE_AFTER_END somewhere in the cause chain. The classes are
- * minified, so only `name` identifies them.
+ * with WriteIterableClosedError; an ended request body rejects them with the Aborted
+ * ConnectError its connect-node pump wraps around ERR_STREAM_WRITE_AFTER_END. The classes
+ * are minified, so only `name` identifies them.
  */
 function isCursorClosedStreamWrite(reason: unknown): boolean {
   if (!(reason instanceof Error)) {
@@ -44,20 +44,11 @@ function isCursorClosedStreamWrite(reason: unknown): boolean {
   if (reason.name === "WriteIterableClosedError") {
     return true;
   }
-  if (reason.name !== "ConnectError") {
-    return false;
-  }
-  const seen = new Set<unknown>();
-  for (let cause: unknown = reason.cause; cause instanceof Error; cause = cause.cause) {
-    if (seen.has(cause)) {
-      return false;
-    }
-    seen.add(cause);
-    if (Reflect.get(cause, "code") === "ERR_STREAM_WRITE_AFTER_END") {
-      return true;
-    }
-  }
-  return false;
+  return (
+    reason.name === "ConnectError" &&
+    reason.cause instanceof Error &&
+    Reflect.get(reason.cause, "code") === "ERR_STREAM_WRITE_AFTER_END"
+  );
 }
 
 function onUnhandledRejection(reason: unknown): void {
