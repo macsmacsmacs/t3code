@@ -172,27 +172,18 @@ export const probeOpenCodeRuntime = (
     ? probeOpenCodeServer(settings.serverUrl, settings.serverPassword)
     : probeOpenCodeBinary(settings.binaryPath, environment);
 
-// `get` trusts a cached 2.x result only: 1.x can be upgraded in place while T3 runs, and 2.x
-// converts the shared database, so going back is unsupported.
+// Only 2.x is kept: 1.x can be upgraded in place while T3 runs, and 2.x converts the shared
+// database, so going back is unsupported.
 export const makeOpenCodeRuntimeProbe = <E>(probe: Effect.Effect<ProbedOpenCode, E>) =>
   Effect.map(
     Cache.makeWith(() => probe, {
       capacity: 1,
-      timeToLive: (exit) => (Exit.isSuccess(exit) ? Duration.infinity : Duration.zero),
+      timeToLive: (exit) =>
+        Exit.isSuccess(exit) && exit.value.generation === "v2" ? Duration.infinity : Duration.zero,
     }),
-    (cache) => {
-      const refresh = Cache.refresh(cache, undefined);
-      const lastSuccess = Cache.getSuccess(cache, undefined);
-      return {
-        get: Effect.flatMap(lastSuccess, (cached) =>
-          Option.isNone(cached)
-            ? Cache.get(cache, undefined)
-            : cached.value.generation === "v2"
-              ? Effect.succeed(cached.value)
-              : refresh,
-        ),
-        refresh,
-        lastSuccess,
-      };
-    },
+    (cache) => ({
+      get: Cache.get(cache, undefined),
+      refresh: Cache.refresh(cache, undefined),
+      lastSuccess: Cache.getSuccess(cache, undefined),
+    }),
   );

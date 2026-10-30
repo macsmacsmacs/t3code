@@ -3,7 +3,6 @@ import * as Effect from "effect/Effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as Option from "effect/Option";
 
 import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
 import {
@@ -194,7 +193,6 @@ describe("OpenCode version probe", () => {
       assert.strictEqual(calls, 3);
       assert.strictEqual((yield* probe.get).generation, "v1");
       assert.strictEqual(calls, 4);
-      assert.strictEqual(Option.getOrThrow(yield* probe.lastSuccess).generation, "v1");
     }),
   );
 });
