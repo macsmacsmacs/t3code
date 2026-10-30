@@ -610,11 +610,12 @@ it.effect.each([
   },
 );
 
-it.effect("a native fork whose source session is gone starts fresh with the source history", () => {
+const runForkWithFailingNativeSource = (forkFailures: number) => {
   const driver = ProviderDriverKind.make("claudeAgent");
   const instanceId = ProviderInstanceId.make("claudeAgent");
   const modelSelection = { instanceId, model: "test-model" };
   const started = Deferred.makeUnsafe<ProviderAdapter.ProviderAdapterV2TurnInput>();
+  let forkCalls = 0;
   const adapter: ProviderAdapter.ProviderAdapterV2["Service"] = {
     instanceId,
     driver,
@@ -655,14 +656,21 @@ it.effect("a native fork whose source session is gone starts fresh with the sour
           respondToRuntimeRequest: () => Effect.void,
           readThreadSnapshot: () => Effect.die("unused"),
           rollbackThread: () => Effect.die("unused"),
-          forkThread: ({ sourceProviderThread }) =>
-            Effect.fail(
-              new ProviderAdapter.ProviderAdapterForkThreadError({
-                driver,
-                providerThreadId: sourceProviderThread.id,
-                cause: "Session not found: native-deleted-source",
-              }),
-            ),
+          forkThread: ({ sourceProviderThread, targetThreadId }) =>
+            ++forkCalls <= forkFailures
+              ? Effect.fail(
+                  new ProviderAdapter.ProviderAdapterForkThreadError({
+                    driver,
+                    providerThreadId: sourceProviderThread.id,
+                    cause: "Session not found: native-deleted-source",
+                  }),
+                )
+              : Effect.succeed({
+                  ...sourceProviderThread,
+                  appThreadId: targetThreadId,
+                  nativeThreadRef: { driver, nativeId: "native-forked", strength: "strong" },
+                  updatedAt: now,
+                }),
         } satisfies ProviderAdapter.ProviderAdapterV2SessionRuntime;
       }),
   };
@@ -806,10 +814,7 @@ it.effect("a native fork whose source session is gone starts fresh with the sour
       [],
     );
     assert.equal(projection.runs[0]?.status, "running");
-    // Resolving the fork transfer stops later sends from retrying the native fork.
-    assert.equal(projection.contextTransfers[0]?.status, "resolved_portable");
-    assert.isNull(projection.providerThreads[0]?.forkedFrom);
-    assert.include(JSON.stringify(yield* Deferred.await(started)), "FORKED_SOURCE_MARKER");
+    return { projection, turn: yield* Deferred.await(started), forkCalls };
   }).pipe(
     Effect.provide(
       ProviderReplayHarness.layerWithRegistry(
@@ -818,4 +823,23 @@ it.effect("a native fork whose source session is gone starts fresh with the sour
       ),
     ),
   );
-});
+};
+
+it.effect("a native fork whose source session is gone starts fresh with the source history", () =>
+  Effect.gen(function* () {
+    const { projection, turn } = yield* runForkWithFailingNativeSource(Number.POSITIVE_INFINITY);
+    // Resolving the fork transfer stops later sends from retrying the native fork.
+    assert.equal(projection.contextTransfers[0]?.status, "resolved_portable");
+    assert.isNull(projection.providerThreads[0]?.forkedFrom);
+    assert.include(JSON.stringify(turn), "FORKED_SOURCE_MARKER");
+  }),
+);
+
+it.effect("a native fork that fails before its last attempt still forks natively", () =>
+  Effect.gen(function* () {
+    const { projection, forkCalls } = yield* runForkWithFailingNativeSource(1);
+    assert.equal(forkCalls, 2);
+    assert.equal(projection.contextTransfers[0]?.status, "consumed");
+    assert.equal(projection.contextTransfers[0]?.resolution?.strategy, "native_fork");
+  }),
+);
