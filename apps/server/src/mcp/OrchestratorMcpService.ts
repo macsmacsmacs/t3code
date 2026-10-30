@@ -1774,9 +1774,9 @@ const make = Effect.gen(function* () {
     interactionModeRank(modes.interactionMode) <= interactionModeRank(limits.interactionMode);
 
   /**
-   * Its webhook URL starts runs, so only a caller that may start one sees it: never a client
-   * approved for read-only access, and a thread caller only with a live turn, at modes covering
-   * every mode the task runs at.
+   * Its webhook URL is a bearer credential that starts runs, so only the save that issues it
+   * returns it, and only to a caller that may start one: never a client approved for read-only
+   * access, and a thread caller only with a live turn, at modes covering every mode the task runs at.
    */
   const summarizeScheduledTask = Effect.fn("OrchestratorMcpService.summarizeScheduledTask")(
     function* (
@@ -1892,7 +1892,7 @@ const make = Effect.gen(function* () {
     }),
     listScheduledTasks: Effect.fn("OrchestratorMcpService.listScheduledTasks")(
       function* (scope, input) {
-        const { parent, limits } = yield* loadCaller(scope);
+        const { parent } = yield* loadCaller(scope);
         const projectId = input.projectId ?? parent?.thread.projectId;
         const { tasks } = yield* scheduledTasks
           .list()
@@ -1902,10 +1902,13 @@ const make = Effect.gen(function* () {
             ),
           );
         return {
-          tasks: yield* Effect.forEach(
-            tasks.filter((task) => projectId === undefined || task.projectId === projectId),
-            (task) => summarizeScheduledTask(scope, { parent, limits }, task),
-          ),
+          tasks: tasks
+            .filter(
+              (task) =>
+                (projectId === undefined || task.projectId === projectId) &&
+                (input.scheduledTaskId === undefined || task.id === input.scheduledTaskId),
+            )
+            .map((task) => scheduledTaskSummary(task, false)),
         };
       },
     ),
@@ -1958,7 +1961,10 @@ const make = Effect.gen(function* () {
               failure("orchestration_error", `Could not update scheduled task: ${error.message}`),
             ),
           );
-        return yield* summarizeScheduledTask(scope, { parent, limits }, task);
+        // The path carries the token, so it changes only when this save issued a new URL.
+        return task.webhook?.path === existing.webhook?.path
+          ? scheduledTaskSummary(task, false)
+          : yield* summarizeScheduledTask(scope, { parent, limits }, task);
       },
     ),
     deleteScheduledTask: Effect.fn("OrchestratorMcpService.deleteScheduledTask")(
