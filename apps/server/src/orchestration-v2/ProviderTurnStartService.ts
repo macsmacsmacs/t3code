@@ -1081,7 +1081,7 @@ export const layer: Layer.Layer<
           if (input.willRetry === true) return yield* forked.failure;
           if (!(yield* isCurrentAttemptInStatus("starting"))) return undefined;
 
-          // The source native session is gone, so start fresh and carry the source history.
+          // Native fork kept failing (e.g. the source session is gone): start fresh with the source history.
           yield* Effect.logWarning("Starting a native fork in a fresh native session", {
             driver: session.driver,
             providerThreadId: providerThread.id,
