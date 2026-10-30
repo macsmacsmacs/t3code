@@ -11,7 +11,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
-import { ChildProcessSpawner } from "effect/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import * as TestClock from "effect/testing/TestClock";
 
 import {
@@ -224,14 +224,22 @@ function fixture(remotes: Record<string, "A" | "B">) {
   };
 }
 
+const compare = (root: string, ref: Option.Option<string>) =>
+  Effect.gen(function* () {
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    return yield* comparisonBase(root, ref).pipe(
+      Effect.provideService(
+        ChildProcessSpawner.ChildProcessSpawner,
+        ChildProcessSpawner.make((command) => spawner.spawn(ChildProcess.setEnv(command, env))),
+      ),
+    );
+  }).pipe(Effect.provide(NodeServices.layer), Effect.runPromise);
+
 it.each(["upstream", "team/upstream"])(
   "compares against %s/main when the fork's origin/main lags it",
   async (remote) => {
     using project = fixture({ origin: "A", [remote]: "B" });
-    const result = await comparisonBase(project.root, Option.none()).pipe(
-      Effect.provide(NodeServices.layer),
-      Effect.runPromise,
-    );
+    const result = await compare(project.root, Option.none());
     assert.strictEqual(result.base, project.commits.B);
     assert.strictEqual(result.ref, remote + "/main");
   },
@@ -239,10 +247,7 @@ it.each(["upstream", "team/upstream"])(
 
 it("compares against an explicit ref instead of the closest remote main", async () => {
   using project = fixture({ origin: "A", upstream: "B" });
-  const result = await comparisonBase(project.root, Option.some("origin/main")).pipe(
-    Effect.provide(NodeServices.layer),
-    Effect.runPromise,
-  );
+  const result = await compare(project.root, Option.some("origin/main"));
   assert.strictEqual(result.base, project.commits.A);
   assert.strictEqual(result.ref, "origin/main");
 });
