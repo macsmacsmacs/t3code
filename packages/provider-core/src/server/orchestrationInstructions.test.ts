@@ -103,8 +103,13 @@ describe("T3 secret instructions", () => {
     );
     assert.match(
       section,
-      /passwordless|NOPASSWD|sudoers/i,
+      /do not [^.]*suggest passwordless sudo/i,
       "nothing stops agents from steering the user to passwordless sudo instead of requesting the password",
+    );
+    assert.match(
+      section,
+      /file argument for any input it would read from stdin/,
+      "the sudo recipe replaces the command's piped stdin with the password file, so `... | sudo tee` writes nothing",
     );
   });
 });
