@@ -2629,6 +2629,17 @@ function claudeSdkBypassSettings(settings: typeof ClaudeBypassSettings.Type) {
   };
 }
 
+// --settings travels to the SDK as options.settings, whose type only allows "disable".
+// Shapes the schema rejects keep their current pass-through; resolveBypassAvailability
+// already treats them as a bypass failure.
+const decodeClaudeLaunchArgBypassSettingsOption = Schema.decodeUnknownOption(ClaudeBypassSettings);
+function claudeSdkLaunchArgSettings(settings: ClaudeSdkSettings): ClaudeSdkSettings {
+  const decoded = decodeClaudeLaunchArgBypassSettingsOption(settings);
+  return Option.isNone(decoded)
+    ? settings
+    : (claudeSdkBypassSettings(decoded.value) as ClaudeSdkSettings);
+}
+
 const ClaudePromptCacheTtl = Schema.Literals(["5m", "1h"]);
 const decodeClaudePromptCacheTtl = Schema.decodeUnknownOption(ClaudePromptCacheTtl);
 const decodeClaudeSubagentCacheSettings = Schema.decodeUnknownEffect(
@@ -9947,7 +9958,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             cwd: turnInput.runtimePolicy.cwd,
             attachmentsDir,
             settings: adapterOptions.settings,
-            ...(launchArgSettings === undefined ? {} : { sdkSettings: launchArgSettings }),
+            ...(launchArgSettings === undefined
+              ? {}
+              : { sdkSettings: claudeSdkLaunchArgSettings(launchArgSettings) }),
             environment: claudeQueryEnvironment(
               adapterOptions.environment,
               turnInput.appThread,
