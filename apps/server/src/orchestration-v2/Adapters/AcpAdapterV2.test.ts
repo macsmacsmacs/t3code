@@ -1252,6 +1252,7 @@ describe("AcpAdapterV2", () => {
         ["architect"],
         "the agent left architect mode during turn 1, so turn 2 must set it back before prompting",
       );
+      assert.deepEqual(yield* runTurn(3), [], "an unchanged mode is not re-sent");
     }).pipe(Effect.provide(layerTest), Effect.scoped),
   );
 
