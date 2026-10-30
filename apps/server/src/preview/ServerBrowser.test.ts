@@ -701,6 +701,8 @@ it.live("streams to a read-only viewer without allowing takeover, input, or view
     Effect.gen(function* () {
       const { browser, tabId } = yield* ready;
       const viewer = yield* browser.attachViewer(viewerInput(tabId, false));
+      const outputs = [yield* Queue.take(viewer.output)];
+      while (outputs.at(-1)!._tag !== "frame") outputs.push(yield* Queue.take(viewer.output));
       const page = contexts[0]!.page;
       page.setViewportSize.mockClear();
       const session = contexts[0]!.sessions.at(-1)!;
@@ -714,7 +716,6 @@ it.live("streams to a read-only viewer without allowing takeover, input, or view
         yield* viewer.input(message);
       expect(page.setViewportSize).not.toHaveBeenCalled();
       expect(session.send.mock.calls.some(([method]) => method.startsWith("Input."))).toBe(false);
-      const outputs = yield* Queue.takeAll(viewer.output);
       expect(outputs).toContainEqual(
         expect.objectContaining({ _tag: "frame", data: Buffer.from("frame") }),
       );
