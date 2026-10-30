@@ -1,3 +1,6 @@
+import * as NodeFS from "node:fs";
+
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { afterEach, assert, expect, it, vi } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -12,9 +15,12 @@ const mockedExecute = vi.fn<AzureDevOpsCli.AzureDevOpsCli["Service"]["execute"]>
 const layer = it.layer(
   AzureDevOpsPullRequestCli.layer.pipe(
     Layer.provide(
-      Layer.mock(AzureDevOpsCli.AzureDevOpsCli)({
-        execute: mockedExecute,
-      }),
+      Layer.mergeAll(
+        Layer.mock(AzureDevOpsCli.AzureDevOpsCli)({
+          execute: mockedExecute,
+        }),
+        NodeServices.layer,
+      ),
     ),
   ),
 );
@@ -338,6 +344,27 @@ layer("AzureDevOpsPullRequestCli.layer", (it) => {
       });
 
       expect(argsOfCall(0)).toContain("--description=- rewrote the page\n- kept the rest");
+    }),
+  );
+
+  it.effect("sends a multi-line description through a file, which survives a Windows az.cmd", () =>
+    Effect.gen(function* () {
+      const body = "## Summary\n\nline two\nline three";
+      let sentDescription: string | undefined;
+      mockedExecute.mockImplementation((input) => {
+        const file = input.args.find((arg) => arg.startsWith("--description=@"));
+        sentDescription =
+          file === undefined
+            ? undefined
+            : NodeFS.readFileSync(file.slice("--description=@".length), "utf8");
+        return Effect.succeed(output("{}"));
+      });
+      const cli = yield* AzureDevOpsPullRequestCli.AzureDevOpsPullRequestCli;
+
+      yield* cli.updatePullRequest({ cwd: "/w", number: 42, body });
+
+      expect(argsOfCall(0).filter((arg) => arg.includes("\n"))).toEqual([]);
+      expect(sentDescription).toBe(body);
     }),
   );
 
