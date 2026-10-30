@@ -266,6 +266,7 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
             "fix(web): B by @b in #2",
             "fix(web): A by @a in #1",
           ],
+          releasedAt: "2026-10-23",
           totalItems: 3,
         },
       ],
