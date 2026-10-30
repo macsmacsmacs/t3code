@@ -168,7 +168,13 @@ export const readOpenCodeUsage = Effect.fn("readOpenCodeUsage")(function* (
           ),
         );
         const timestamp = columns.has("time_created") ? "time_created" : "NULL";
-        const predicates = table === "session_message" ? ["type = 'assistant'"] : [];
+        // User messages can hold hundreds of MB of diffs; keep and project only usage fields in SQL.
+        // JSON functions raise on malformed input, so guard them like JSON.parse would skip it.
+        const predicates = [
+          `CASE WHEN typeof(data) = 'text' AND json_valid(data)
+           THEN json_type(data, '$.role') IS NULL OR data ->> '$.role' = 'assistant' END`,
+        ];
+        if (table === "session_message") predicates.push("type = 'assistant'");
         if (timestamp !== "NULL") predicates.push("time_created >= ?");
         predicates.push("rowid > ?", "rowid <= ?");
         const [range] = yield* sql.unsafe<{
@@ -190,7 +196,11 @@ export const readOpenCodeUsage = Effect.fn("readOpenCodeUsage")(function* (
               readonly data: unknown;
               readonly created: unknown;
             }>(
-              `SELECT id, session_id, data, ${timestamp} AS created
+              `SELECT id, session_id, ${timestamp} AS created, json_object(
+                 'tokens', data -> '$.tokens', 'cost', data -> '$.cost',
+                 'model', data -> '$.model', 'modelID', data -> '$.modelID',
+                 'time', data -> '$.time', 'id', data -> '$.id', 'sessionID', data -> '$.sessionID'
+               ) AS data
                FROM ${table} WHERE ${predicates.join(" AND ")} ORDER BY rowid`,
               [
                 ...(timestamp === "NULL" ? [] : [sinceMs]),
