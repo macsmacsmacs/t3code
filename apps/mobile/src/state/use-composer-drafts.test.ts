@@ -1923,6 +1923,33 @@ describe("mobile composer drafts", () => {
     expect(findNewTaskDraftKeys(appAtomRegistry.get(composerDraftsAtom), to)).toEqual([key]);
   });
 
+  it("keeps a pull request worktree selection when the draft moves between machines and back", () => {
+    const from = {
+      environmentId: EnvironmentId.make("environment-1"),
+      projectId: ProjectId.make("project-1"),
+    };
+    const to = {
+      environmentId: EnvironmentId.make("environment-2"),
+      projectId: ProjectId.make("project-2"),
+    };
+    const pullRequestSelection = {
+      mode: "worktree" as const,
+      branch: "feature/pr-head",
+      worktreePath: null,
+      startFromOrigin: false,
+      pullRequestReference: "https://github.com/acme/repo/pull/42",
+    };
+    const key = createNewTaskDraft(from);
+    setComposerDraftText(key, "Review this PR");
+    updateComposerDraftSettings(key, { workspaceSelection: pullRequestSelection });
+
+    retargetNewTaskDraft(key, to);
+    expect(getComposerDraftSnapshot(key).workspaceSelection).toEqual(pullRequestSelection);
+
+    retargetNewTaskDraft(key, from);
+    expect(getComposerDraftSnapshot(key).workspaceSelection).toEqual(pullRequestSelection);
+  });
+
   it("merges persisted option memory without replacing newer choices", async () => {
     composerDraftFileMocks.setDocument({
       schemaVersion: 1,
